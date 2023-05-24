@@ -23,8 +23,8 @@ class coRNNCell(nn.Module):
         else:
             i2h_inp = torch.cat((x, hz, hy),1)
         hz = hz + self.dt * (torch.tanh(self.i2h(i2h_inp))
-                                   - self.gamma * hy - self.epsilon * hz)
-        hy = hy + self.dt * hz
+                                   - self.gamma * hy - self.epsilon * hz) - self.dt * hz
+        hy = hy + self.dt * hz - self.dt * hy
 
         return hy, hz
 
@@ -67,8 +67,7 @@ class coESN(nn.Module):
         else:
             self.epsilon = epsilon
 
-        # h2h = 2 * (2 * torch.rand(n_hid, n_hid) - 1)
-        h2h = torch.rand(n_hid, n_hid)
+        h2h = 2 * (2 * torch.rand(n_hid, n_hid) - 1)
         h2h = spectral_norm_scaling(h2h, rho)
         self.h2h = nn.Parameter(h2h, requires_grad=False)
 
@@ -87,6 +86,7 @@ class coESN(nn.Module):
         hy = hy + self.dt * hz
         if self.leaky:
             hy = hy - self.dt * hy
+
         return hy, hz
     def forward(self, x):
         ## initialize hidden states
@@ -97,5 +97,5 @@ class coESN(nn.Module):
             hy, hz = self.cell(x[t],hy,hz)
             all_states.append(hy)
 
-        return all_states, [hy]  # list to be compatible with ESN implementation
+        return torch.stack(all_states, dim=1), [hy]  # list to be compatible with ESN implementation
 

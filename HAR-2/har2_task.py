@@ -22,14 +22,20 @@ parser.add_argument('--gamma', type=float, default=0.2,
                     help='y controle parameter <gamma> of the coRNN')
 parser.add_argument('--epsilon', type=float, default=6.4,
                     help='z controle parameter <epsilon> of the coRNN')
+parser.add_argument('--cpu', action="store_true")
+parser.add_argument('--no_friction', action="store_true")
+
 
 args = parser.parse_args()
 print(args)
 
+device = torch.device("cuda") if torch.cuda.is_available() and not args.cpu else torch.device("cpu")
+
 ## Define the RNN model:
 n_input = 9
 n_output = 1
-model = network.coRNN(n_input, args.n_hid, n_output,args.dt,args.gamma,args.epsilon)
+model = network.coRNN(n_input, args.n_hid, n_output,args.dt,args.gamma,args.epsilon, device=device,
+                      no_friction=args.no_friction).to(device)
 
 ## Define data loader:
 train_data, train_labels = np.load('data/trainx'), np.load('data/trainy')
@@ -62,6 +68,7 @@ def test(dataloader):
     model.eval()
     with torch.no_grad():
         for i, (data, labels) in enumerate(dataloader):
+            data, labels = data.to(device), labels.to(device)
             data = data.permute(1, 0, 2)
             predictions = model(data).squeeze(1)
             acc = binary_accuracy(predictions, labels)
@@ -72,6 +79,7 @@ def test(dataloader):
 for epoch in range(args.epochs):
     model.train()
     for i, (data, labels) in enumerate(trainloader):
+        data, labels = data.to(device), labels.to(device)
         data = data.permute(1,0,2)
         optimizer.zero_grad()
         output = model(data).squeeze(1)
@@ -81,5 +89,14 @@ for epoch in range(args.epochs):
 
     eval_acc = test(validloader)
     test_acc = test(testloader)
+
+    if args.no_friction:
+        f = open('result/HAR_log_no_friction.txt', 'a')
+    else:
+        f = open('result/HAR_log.txt', 'a')
+    f.write('valid accuracy: ' + str(round(eval_acc,2)) + '\n')
+    f.write('test accuracy: ' + str(round(test_acc,2)) + '\n')
+    f.close()
+
     print('Valid set: Accuracy: {:.2f}%\n'.format(eval_acc))
     print('Test set:  Accuracy: {:.2f}%\n'.format(test_acc))

@@ -5,7 +5,10 @@ import torch.nn.utils
 import utils
 from pathlib import Path
 import argparse
-
+from tqdm import tqdm
+from esn import DeepReservoir
+from sklearn.linear_model import LogisticRegression
+from sklearn import preprocessing
 
 parser = argparse.ArgumentParser(description='training parameters')
 
@@ -23,17 +26,71 @@ parser.add_argument('--gamma', type=float, default=2.7,
                     help='y controle parameter <gamma> of the coRNN')
 parser.add_argument('--epsilon', type=float, default=4.7,
                     help='z controle parameter <epsilon> of the coRNN')
+parser.add_argument('--gamma_range', type=float, default=2.7,
+                    help='y controle parameter <gamma> of the coRNN')
+parser.add_argument('--epsilon_range', type=float, default=4.7,
+                    help='z controle parameter <epsilon> of the coRNN')
+parser.add_argument('--cpu', action="store_true")
+parser.add_argument('--no_friction', action="store_true")
+parser.add_argument('--esn', action="store_true")
+parser.add_argument('--inp_scaling', type=float, default=1.,
+                    help='ESN input scaling')
+parser.add_argument('--rho', type=float, default=0.99,
+                    help='ESN spectral radius')
+parser.add_argument('--leaky', type=float, default=1.0,
+                    help='ESN spectral radius')
 
+
+main_folder = 'result_leaky'
 args = parser.parse_args()
 print(args)
 
-torch.manual_seed(46159)
+@torch.no_grad()
+def check(m):
+    psi = torch.max(1 - m.epsilon * m.dt)
+    eta = torch.max(1 - m.gamma * m.dt**2)
+    sigma = torch.norm(m.h2h)
+    print(psi, eta, sigma, torch.max(m.epsilon), torch.max(m.gamma))
+
+    if (psi - eta) / (m.dt**2) <= psi - torch.max(m.gamma):
+        if sigma <= (psi - eta) / (m.dt**2) and psi < 1 / (1 + m.dt):
+            return True
+        if (psi - eta) / (m.dt**2) < sigma and sigma <= psi - torch.max(m.gamma) and sigma < (1 - psi - eta) / m.dt**2:
+            return True
+        if sigma >= psi - torch.max(m.gamma) and sigma <= (1 - eta - m.dt * torch.max(m.gamma)) / (m.dt * (1 + m.dt)):
+            return True
+    else:
+        if sigma <= psi - torch.max(m.gamma) and psi < 1 / (1 + m.dt):
+            return True
+        if psi - torch.max(m.gamma) < sigma and sigma <= (psi - eta) / (m.dt**2) and sigma < ((1 - psi) / m.dt) - torch.max(m.gamma):
+            return True
+        if sigma >= (psi - eta) / m.dt**2 and sigma < (1 - eta - m.dt * torch.max(m.gamma)) / (m.dt * (1 + m.dt)):
+            return True
+    return False
+
+
+device = torch.device("cuda") if torch.cuda.is_available() and not args.cpu else torch.device("cpu")
 
 n_inp = 1
 n_out = 10
 bs_test = 1000
+gamma = (args.gamma - args.gamma_range / 2., args.gamma + args.gamma_range / 2.)
+epsilon = (args.epsilon - args.epsilon_range / 2., args.epsilon + args.epsilon_range / 2.)
+if args.esn and not args.no_friction:
+    model = DeepReservoir(n_inp, tot_units=args.n_hid, spectral_radius=args.rho,
+                          input_scaling=args.inp_scaling,
+                          connectivity_recurrent=args.n_hid,
+                          connectivity_input=args.n_hid, leaky=args.leaky).to(device)
+elif args.esn and args.no_friction:
+    model = network.coESN(n_inp, args.n_hid, args.dt, gamma, epsilon, args.rho,
+                          args.inp_scaling, device=device).to(device)
+    check_passed = check(model)
+    print("Check: ", check_passed)
+    exit(0)
 
-model = network.coRNN(n_inp, args.n_hid, n_out,args.dt,args.gamma,args.epsilon)
+else:
+    model = network.coRNN(n_inp, args.n_hid, n_out,args.dt,gamma,epsilon,
+                          no_friction=args.no_friction, device=device).to(device)
 train_loader, valid_loader, test_loader = utils.get_data(args.batch,bs_test)
 
 objective = nn.CrossEntropyLoss()
@@ -45,6 +102,7 @@ def test(data_loader):
     test_loss = 0
     with torch.no_grad():
         for i, (images, labels) in enumerate(data_loader):
+            images, labels = images.to(device), labels.to(device)
             images = images.reshape(bs_test, 1, 784)
             images = images.permute(2, 0, 1)
 
@@ -57,32 +115,85 @@ def test(data_loader):
 
     return accuracy.item()
 
-for epoch in range(args.epochs):
-    model.train()
-    for i, (images, labels) in enumerate(train_loader):
+@torch.no_grad()
+def test_esn(data_loader, classifier, scaler):
+    activations, ys = [], []
+    for images, labels in tqdm(data_loader):
+        images = images.to(device)
+        images = images.reshape(bs_test, 1, 784)
+        images = images.permute(0, 2, 1) if (not args.no_friction) else images.permute(2, 0, 1)
+        output = model(images)[-1][0]
+        activations.append(output.cpu())
+        ys.append(labels)
+    activations = torch.cat(activations, dim=0).numpy()
+    activations = scaler.transform(activations)
+    ys = torch.cat(ys, dim=0).numpy()
+    return classifier.score(activations, ys)
+
+
+if args.esn:
+    activations, ys = [], []
+    for images, labels in tqdm(train_loader):
+        images = images.to(device)
+        ## Reshape images for sequence learning:
         images = images.reshape(args.batch, 1, 784)
-        images = images.permute(2, 0, 1)
+        images = images.permute(0, 2, 1) if (not args.no_friction) else images.permute(2, 0, 1)
+        output = model(images)[-1][0]
+        activations.append(output.cpu())
+        ys.append(labels)
+    activations = torch.cat(activations, dim=0).numpy()
+    ys = torch.cat(ys, dim=0).numpy()
+    scaler = preprocessing.StandardScaler().fit(activations)
+    activations = scaler.transform(activations)
+    classifier = LogisticRegression(max_iter=1000).fit(activations, ys)
+    valid_acc = test_esn(valid_loader, classifier, scaler)
+    test_acc = test_esn(test_loader, classifier, scaler)
+else:
+    for epoch in range(args.epochs):
+        print(f"Epoch {epoch}")
+        model.train()
+        for images, labels in tqdm(train_loader):
+            images, labels = images.to(device), labels.to(device)
+            images = images.reshape(args.batch, 1, 784)
+            images = images.permute(2, 0, 1)
 
-        optimizer.zero_grad()
-        output = model(images)
-        loss = objective(output, labels)
-        loss.backward()
-        optimizer.step()
+            optimizer.zero_grad()
+            output = model(images)
+            loss = objective(output, labels)
+            loss.backward()
+            optimizer.step()
 
-    valid_acc = test(valid_loader)
-    test_acc = test(test_loader)
-    Path('result').mkdir(parents=True, exist_ok=True)
-    f = open('result/sMNIST_log.txt', 'a')
-    if (epoch == 0):
-        f.write('## learning rate = ' + str(args.lr) + ', dt = ' + str(args.dt) + ', gamma = ' + str(args.gamma) + ', epsilon = ' + str(args.epsilon) + '\n')
-    f.write('eval accuracy: ' + str(round(valid_acc, 2)) + '\n')
-    f.close()
+        valid_acc = test(valid_loader)
+        test_acc = test(test_loader)
+        Path(main_folder).mkdir(parents=True, exist_ok=True)
+        if args.no_friction:
+            f = open(f'{main_folder}/sMNIST_log_no_friction.txt', 'a')
+        else:
+            f = open(f'{main_folder}/sMNIST_log.txt', 'a')
 
-    if (epoch+1) % 100 == 0:
-        args.lr /= 10.
-        for param_group in optimizer.param_groups:
-            param_group['lr'] = args.lr
+        f.write('valid accuracy: ' + str(round(valid_acc, 2)) + '\n')
+        f.write('test accuracy: ' + str(round(test_acc, 2)) + '\n')
+        f.close()
+        print(f"Valid accuracy: ", valid_acc)
+        print(f"Test accuracy: ", test_acc)
 
-f = open('result/sMNIST_log.txt', 'a')
-f.write('final test accuracy: ' + str(round(test_acc, 2)) + '\n')
+        if (epoch+1) % 100 == 0:
+            args.lr /= 10.
+            for param_group in optimizer.param_groups:
+                param_group['lr'] = args.lr
+
+if args.no_friction and (not args.esn): # coRNN without friction
+    f = open(f'{main_folder}/sMNIST_log_no_friction.txt', 'a')
+elif args.esn and args.no_friction: # coESN
+    f = open(f'{main_folder}/sMNIST_log_coESN.txt', 'a')
+elif args.esn: # ESN
+    f = open(f'{main_folder}/sMNIST_log_esn.txt', 'a')
+else: # original coRNN
+    f = open(f'{main_folder}/sMNIST_log.txt', 'a')
+ar = ''
+for k, v in vars(args).items():
+    ar += f'{str(k)}: {str(v)}, '
+ar += f'valid: {str(round(valid_acc, 2))}, test: {str(round(test_acc, 2))}'
+f.write(ar + '\n')
+f.write('**************\n\n\n')
 f.close()
