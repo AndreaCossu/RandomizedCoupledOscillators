@@ -1,14 +1,14 @@
 from torch import nn, optim
 import torch
-import network
 import torch.nn.utils
-import utils
+from utils import get_mnist_data, coRNN, coESN, check
 from pathlib import Path
 import argparse
 from tqdm import tqdm
 from esn import DeepReservoir
-from sklearn.linear_model import LogisticRegression
 from sklearn import preprocessing
+from sklearn.linear_model import LogisticRegression
+
 
 parser = argparse.ArgumentParser(description='training parameters')
 
@@ -18,19 +18,20 @@ parser.add_argument('--epochs', type=int, default=120,
                     help='max epochs')
 parser.add_argument('--batch', type=int, default=120,
                     help='batch size')
-parser.add_argument('--lr', type=float, default=0.0021,
+parser.add_argument('--lr', type=float, default=0.0054,
                     help='learning rate')
-parser.add_argument('--dt', type=float, default=0.042,
+parser.add_argument('--dt', type=float, default=0.076,
                     help='step size <dt> of the coRNN')
-parser.add_argument('--gamma', type=float, default=2.7,
+parser.add_argument('--gamma', type=float, default=0.4,
                     help='y controle parameter <gamma> of the coRNN')
-parser.add_argument('--epsilon', type=float, default=4.7,
+parser.add_argument('--epsilon', type=float, default=8.0,
                     help='z controle parameter <epsilon> of the coRNN')
 parser.add_argument('--gamma_range', type=float, default=2.7,
                     help='y controle parameter <gamma> of the coRNN')
 parser.add_argument('--epsilon_range', type=float, default=4.7,
                     help='z controle parameter <epsilon> of the coRNN')
 parser.add_argument('--cpu', action="store_true")
+parser.add_argument('--check', action="store_true")
 parser.add_argument('--no_friction', action="store_true")
 parser.add_argument('--esn', action="store_true")
 parser.add_argument('--inp_scaling', type=float, default=1.,
@@ -40,58 +41,39 @@ parser.add_argument('--rho', type=float, default=0.99,
 parser.add_argument('--leaky', type=float, default=1.0,
                     help='ESN spectral radius')
 
-
-main_folder = 'result_leaky'
 args = parser.parse_args()
 print(args)
-
-@torch.no_grad()
-def check(m):
-    psi = torch.max(1 - m.epsilon * m.dt)
-    eta = torch.max(1 - m.gamma * m.dt**2)
-    sigma = torch.norm(m.h2h)
-    print(psi, eta, sigma, torch.max(m.epsilon), torch.max(m.gamma))
-
-    if (psi - eta) / (m.dt**2) <= psi - torch.max(m.gamma):
-        if sigma <= (psi - eta) / (m.dt**2) and psi < 1 / (1 + m.dt):
-            return True
-        if (psi - eta) / (m.dt**2) < sigma and sigma <= psi - torch.max(m.gamma) and sigma < (1 - psi - eta) / m.dt**2:
-            return True
-        if sigma >= psi - torch.max(m.gamma) and sigma <= (1 - eta - m.dt * torch.max(m.gamma)) / (m.dt * (1 + m.dt)):
-            return True
-    else:
-        if sigma <= psi - torch.max(m.gamma) and psi < 1 / (1 + m.dt):
-            return True
-        if psi - torch.max(m.gamma) < sigma and sigma <= (psi - eta) / (m.dt**2) and sigma < ((1 - psi) / m.dt) - torch.max(m.gamma):
-            return True
-        if sigma >= (psi - eta) / m.dt**2 and sigma < (1 - eta - m.dt * torch.max(m.gamma)) / (m.dt * (1 + m.dt)):
-            return True
-    return False
-
-
-device = torch.device("cuda") if torch.cuda.is_available() and not args.cpu else torch.device("cpu")
 
 n_inp = 1
 n_out = 10
 bs_test = 1000
+
+main_folder = 'result'
+
+device = torch.device("cuda") if torch.cuda.is_available() and not args.cpu else torch.device("cpu")
+perm = torch.randperm(784).to(device)
 gamma = (args.gamma - args.gamma_range / 2., args.gamma + args.gamma_range / 2.)
 epsilon = (args.epsilon - args.epsilon_range / 2., args.epsilon + args.epsilon_range / 2.)
+
 if args.esn and not args.no_friction:
     model = DeepReservoir(n_inp, tot_units=args.n_hid, spectral_radius=args.rho,
                           input_scaling=args.inp_scaling,
                           connectivity_recurrent=args.n_hid,
                           connectivity_input=args.n_hid, leaky=args.leaky).to(device)
 elif args.esn and args.no_friction:
-    model = network.coESN(n_inp, args.n_hid, args.dt, gamma, epsilon, args.rho,
-                          args.inp_scaling, device=device).to(device)
-    check_passed = check(model)
-    print("Check: ", check_passed)
-    exit(0)
 
+    model = coESN(n_inp, args.n_hid, args.dt, gamma, epsilon, args.rho,
+                          args.inp_scaling, device=device).to(device)
+    if args.check:
+        check_passed = check(model)
+        print("Check: ", check_passed)
+        if not check_passed:
+            raise ValueError("Check not passed.")
 else:
-    model = network.coRNN(n_inp, args.n_hid, n_out,args.dt,gamma,epsilon,
+    model = coRNN(n_inp, args.n_hid, n_out,args.dt,gamma,epsilon,
                           no_friction=args.no_friction, device=device).to(device)
-train_loader, valid_loader, test_loader = utils.get_data(args.batch,bs_test)
+
+train_loader, valid_loader, test_loader = get_mnist_data(args.batch,bs_test)
 
 objective = nn.CrossEntropyLoss()
 optimizer = optim.Adam(model.parameters(), lr=args.lr)
@@ -101,10 +83,13 @@ def test(data_loader):
     correct = 0
     test_loss = 0
     with torch.no_grad():
-        for i, (images, labels) in enumerate(data_loader):
+        i = -1
+        for images, labels in tqdm(data_loader):
             images, labels = images.to(device), labels.to(device)
+            i += 1
             images = images.reshape(bs_test, 1, 784)
             images = images.permute(2, 0, 1)
+            images = images[perm, :, :]
 
             output = model(images)
             test_loss += objective(output, labels).item()
@@ -121,7 +106,9 @@ def test_esn(data_loader, classifier, scaler):
     for images, labels in tqdm(data_loader):
         images = images.to(device)
         images = images.reshape(bs_test, 1, 784)
-        images = images.permute(0, 2, 1) if (not args.no_friction) else images.permute(2, 0, 1)
+        images = images.permute(2, 0, 1)[perm, :, :]
+        if not args.no_friction:
+            images = images.permute(1, 0, 2)
         output = model(images)[-1][0]
         activations.append(output.cpu())
         ys.append(labels)
@@ -130,14 +117,15 @@ def test_esn(data_loader, classifier, scaler):
     ys = torch.cat(ys, dim=0).numpy()
     return classifier.score(activations, ys)
 
-
 if args.esn:
     activations, ys = [], []
     for images, labels in tqdm(train_loader):
         images = images.to(device)
         ## Reshape images for sequence learning:
         images = images.reshape(args.batch, 1, 784)
-        images = images.permute(0, 2, 1) if (not args.no_friction) else images.permute(2, 0, 1)
+        images = images.permute(2, 0, 1)[perm, :, :]
+        if not args.no_friction:
+            images = images.permute(1, 0, 2)
         output = model(images)[-1][0]
         activations.append(output.cpu())
         ys.append(labels)
@@ -155,7 +143,7 @@ else:
         for images, labels in tqdm(train_loader):
             images, labels = images.to(device), labels.to(device)
             images = images.reshape(args.batch, 1, 784)
-            images = images.permute(2, 0, 1)
+            images = images.permute(2, 0, 1)[perm, :, :]
 
             optimizer.zero_grad()
             output = model(images)
@@ -165,11 +153,12 @@ else:
 
         valid_acc = test(valid_loader)
         test_acc = test(test_loader)
+
         Path(main_folder).mkdir(parents=True, exist_ok=True)
         if args.no_friction:
-            f = open(f'{main_folder}/sMNIST_log_no_friction.txt', 'a')
+            f = open(f'{main_folder}/psMNIST_log_no_friction.txt', 'a')
         else:
-            f = open(f'{main_folder}/sMNIST_log.txt', 'a')
+            f = open(f'{main_folder}/psMNIST_log.txt', 'a')
 
         f.write('valid accuracy: ' + str(round(valid_acc, 2)) + '\n')
         f.write('test accuracy: ' + str(round(test_acc, 2)) + '\n')
@@ -183,13 +172,13 @@ else:
                 param_group['lr'] = args.lr
 
 if args.no_friction and (not args.esn): # coRNN without friction
-    f = open(f'{main_folder}/sMNIST_log_no_friction.txt', 'a')
+    f = open(f'{main_folder}/psMNIST_log_no_friction.txt', 'a')
 elif args.esn and args.no_friction: # coESN
-    f = open(f'{main_folder}/sMNIST_log_coESN.txt', 'a')
+    f = open(f'{main_folder}/psMNIST_log_coESN.txt', 'a')
 elif args.esn: # ESN
-    f = open(f'{main_folder}/sMNIST_log_esn.txt', 'a')
+    f = open(f'{main_folder}/psMNIST_log_esn.txt', 'a')
 else: # original coRNN
-    f = open(f'{main_folder}/sMNIST_log.txt', 'a')
+    f = open(f'{main_folder}/psMNIST_log.txt', 'a')
 ar = ''
 for k, v in vars(args).items():
     ar += f'{str(k)}: {str(v)}, '

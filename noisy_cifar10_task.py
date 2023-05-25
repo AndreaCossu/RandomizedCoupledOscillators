@@ -1,7 +1,6 @@
 from torch import nn, optim
 import torch
-import utils
-import network
+from utils import get_cifar_data, coESN, coRNN, check
 import argparse
 import torch.nn.utils
 from pathlib import Path
@@ -32,6 +31,7 @@ parser.add_argument('--gamma_range', type=float, default=2.7,
 parser.add_argument('--epsilon_range', type=float, default=4.7,
                     help='z controle parameter <epsilon> of the coRNN')
 parser.add_argument('--cpu', action="store_true")
+parser.add_argument('--check', action="store_true")
 parser.add_argument('--no_friction', action="store_true")
 parser.add_argument('--esn', action="store_true")
 parser.add_argument('--inp_scaling', type=float, default=1.,
@@ -44,7 +44,7 @@ parser.add_argument('--leaky', type=float, default=1.0,
 args = parser.parse_args()
 print(args)
 
-main_folder = 'result_leaky'
+main_folder = 'result'
 
 device = torch.device("cuda") if torch.cuda.is_available() and not args.cpu else torch.device("cpu")
 print("Using device ", device)
@@ -61,13 +61,18 @@ if args.esn and not args.no_friction:
                           connectivity_input=args.n_hid, leaky=args.leaky).to(device)
 elif args.esn and args.no_friction:
 
-    model = network.coESN(n_inp, args.n_hid, args.dt, gamma, epsilon, args.rho,
+    model = coESN(n_inp, args.n_hid, args.dt, gamma, epsilon, args.rho,
                           args.inp_scaling, device=device).to(device)
+    if args.check:
+        check_passed = check(model)
+        print("Check: ", check_passed)
+        if not check_passed:
+            raise ValueError("Check not passed.")
 else:
-    model = network.coRNN(n_inp, args.n_hid, n_out,args.dt,gamma,epsilon,
+    model = coRNN(n_inp, args.n_hid, n_out,args.dt,gamma,epsilon,
                           no_friction=args.no_friction, device=device).to(device)
 
-train_loader, valid_loader, test_loader = utils.get_data(args.batch,1000)
+train_loader, valid_loader, test_loader = get_cifar_data(args.batch,1000)
 
 
 ## Define the loss
