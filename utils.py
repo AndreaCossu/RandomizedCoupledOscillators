@@ -4,7 +4,6 @@ import torch
 import torchvision
 import torchvision.transforms as transforms
 from torch import nn
-from torch.autograd import Variable
 from esn import spectral_norm_scaling
 
 
@@ -44,8 +43,8 @@ class coRNN(nn.Module):
 
     def forward(self, x):
         ## initialize hidden states
-        hy = Variable(torch.zeros(x.size(1),self.n_hid)).to(self.device)
-        hz = Variable(torch.zeros(x.size(1),self.n_hid)).to(self.device)
+        hy = torch.zeros(x.size(1), self.n_hid).to(self.device)
+        hz = torch.zeros(x.size(1), self.n_hid).to(self.device)
 
         for t in range(x.size(0)):
             hy, hz = self.cell(x[t],hy,hz)
@@ -95,8 +94,8 @@ class coESN(nn.Module):
         return hy, hz
     def forward(self, x):
         ## initialize hidden states
-        hy = Variable(torch.zeros(x.size(1),self.n_hid)).to(self.device)
-        hz = Variable(torch.zeros(x.size(1),self.n_hid)).to(self.device)
+        hy = torch.zeros(x.size(1),self.n_hid).to(self.device)
+        hz = torch.zeros(x.size(1),self.n_hid).to(self.device)
         all_states = []
         for t in range(x.size(0)):
             hy, hz = self.cell(x[t],hy,hz)
