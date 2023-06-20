@@ -56,7 +56,7 @@ class coRNN(nn.Module):
 
 class coESN(nn.Module):
     def __init__(self, n_inp, n_hid, dt, gamma, epsilon, rho, input_scaling, device='cpu',
-                 fading=False, stable_h=False):
+                 fading=False):
         super().__init__()
         self.n_hid = n_hid
         self.device = device
@@ -73,10 +73,7 @@ class coESN(nn.Module):
         else:
             self.epsilon = epsilon
 
-        if stable_h:
-            h2h = torch.rand(n_hid, n_hid)
-        else:
-            h2h = 2 * (2 * torch.rand(n_hid, n_hid) - 1)
+        h2h = 2 * (2 * torch.rand(n_hid, n_hid) - 1)
         h2h = spectral_norm_scaling(h2h, rho)
         self.h2h = nn.Parameter(h2h, requires_grad=False)
 
