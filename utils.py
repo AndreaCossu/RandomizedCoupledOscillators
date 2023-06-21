@@ -23,9 +23,9 @@ class coRNNCell(nn.Module):
 
     def forward(self,x,hy,hz):
         if self.no_friction:
-            i2h_inp = torch.cat((x, hy), 0)
+            i2h_inp = torch.cat((x, hy), 1)
         else:
-            i2h_inp = torch.cat((x, hz, hy), 0)
+            i2h_inp = torch.cat((x, hz, hy), 1)
         hz = hz + self.dt * (torch.tanh(self.i2h(i2h_inp))
                                    - self.gamma * hy - self.epsilon * hz)
         hy = hy + self.dt * hz

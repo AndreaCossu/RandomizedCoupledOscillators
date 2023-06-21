@@ -40,6 +40,7 @@ parser.add_argument('--rho', type=float, default=0.99,
                     help='ESN spectral radius')
 parser.add_argument('--leaky', type=float, default=1.0,
                     help='ESN spectral radius')
+parser.add_argument('use_test', action="store_true")
 
 args = parser.parse_args()
 print(args)
