@@ -23,9 +23,9 @@ class coRNNCell(nn.Module):
 
     def forward(self,x,hy,hz):
         if self.no_friction:
-            i2h_inp = torch.cat((x, hy),1)
+            i2h_inp = torch.cat((x, hy), 0)
         else:
-            i2h_inp = torch.cat((x, hz, hy),1)
+            i2h_inp = torch.cat((x, hz, hy), 0)
         hz = hz + self.dt * (torch.tanh(self.i2h(i2h_inp))
                                    - self.gamma * hy - self.epsilon * hz)
         hy = hy + self.dt * hz
@@ -33,6 +33,9 @@ class coRNNCell(nn.Module):
         return hy, hz
 
 class coRNN(nn.Module):
+    """
+    Batch-first (B, L, I)
+    """
     def __init__(self, n_inp, n_hid, n_out, dt, gamma, epsilon, device='cpu',
                  no_friction=False):
         super(coRNN, self).__init__()
@@ -43,17 +46,20 @@ class coRNN(nn.Module):
 
     def forward(self, x):
         ## initialize hidden states
-        hy = torch.zeros(x.size(1), self.n_hid).to(self.device)
-        hz = torch.zeros(x.size(1), self.n_hid).to(self.device)
+        hy = torch.zeros(x.size(0), self.n_hid).to(self.device)
+        hz = torch.zeros(x.size(0), self.n_hid).to(self.device)
 
-        for t in range(x.size(0)):
-            hy, hz = self.cell(x[t],hy,hz)
+        for t in range(x.size(1)):
+            hy, hz = self.cell(x[:, t],hy,hz)
         output = self.readout(hy)
 
         return output
 
 
 class coESN(nn.Module):
+    """
+    Batch-first (B, L, I)
+    """
     def __init__(self, n_inp, n_hid, dt, gamma, epsilon, rho, input_scaling, device='cpu',
                  fading=False):
         super().__init__()
@@ -92,13 +98,14 @@ class coESN(nn.Module):
         if self.fading:
             hy = hy - self.dt * hy
         return hy, hz
+
     def forward(self, x):
         ## initialize hidden states
-        hy = torch.zeros(x.size(1),self.n_hid).to(self.device)
-        hz = torch.zeros(x.size(1),self.n_hid).to(self.device)
+        hy = torch.zeros(x.size(0),self.n_hid).to(self.device)
+        hz = torch.zeros(x.size(0),self.n_hid).to(self.device)
         all_states = []
-        for t in range(x.size(0)):
-            hy, hz = self.cell(x[t],hy,hz)
+        for t in range(x.size(1)):
+            hy, hz = self.cell(x[:, t],hy,hz)
             all_states.append(hy)
 
         return torch.stack(all_states, dim=1), [hy]  # list to be compatible with ESN implementation
@@ -131,7 +138,7 @@ def get_cifar_data(bs_train,bs_test):
 
     return train_loader, valid_loader, test_loader
 
-def get_lorenz(N, F, num_batch=128):
+def get_lorenz(N, F, num_batch=128, lag=25, washout=200):
     # https://en.wikipedia.org/wiki/Lorenz_96_model
     def L96(x, t):
         """Lorenz 96 model with constant forcing"""
@@ -142,17 +149,15 @@ def get_lorenz(N, F, num_batch=128):
             d[i] = (x[(i + 1) % N] - x[i - 2]) * x[i - 1] - x[i] + F
         return d
 
-    lag = 25
-    washout = 200
     dt = 0.01
-    t = np.arange(0.0, 20+(lag*dt)+(washout*dt), dt) # 2000 points
+    t = np.arange(0.0, 20+(lag*dt)+(washout*dt), dt)
     dataset = []
     for i in range(num_batch):
         x0 = np.random.rand(N) + F - 0.5 # [F-0.5, F+0.5]
         x = odeint(L96, x0, t)
         dataset.append(x)
     dataset = np.stack(dataset, axis=0)  # (num_batch, 2000, 5)
-    dataset = torch.from_numpy(dataset).permute(1, 0, 2).float() # (2000, num_batch, 5)
+    dataset = torch.from_numpy(dataset).float()
     return dataset
 
 def get_mnist_data(bs_train,bs_test):

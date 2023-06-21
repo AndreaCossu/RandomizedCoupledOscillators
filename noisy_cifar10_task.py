@@ -62,7 +62,7 @@ if args.esn and not args.no_friction:
 elif args.esn and args.no_friction:
 
     model = coESN(n_inp, args.n_hid, args.dt, gamma, epsilon, args.rho,
-                          args.inp_scaling, device=device).to(device)
+                  args.inp_scaling, device=device).to(device)
     if args.check:
         check_passed = check(model)
         print("Check: ", check_passed)
@@ -70,7 +70,7 @@ elif args.esn and args.no_friction:
             raise ValueError("Check not passed.")
 else:
     model = coRNN(n_inp, args.n_hid, n_out,args.dt,gamma,epsilon,
-                          no_friction=args.no_friction, device=device).to(device)
+                  no_friction=args.no_friction, device=device).to(device)
 
 train_loader, valid_loader, test_loader = get_cifar_data(args.batch,1000)
 
@@ -91,7 +91,7 @@ def test(data_loader):
         for images, labels in tqdm(data_loader):
             images, labels = images.to(device), labels.to(device)
             ## Reshape images for sequence learning:
-            images = torch.cat((images.permute(0,2,1,3).reshape(1000,32,96),rand_test),dim=1).permute(1,0,2)
+            images = torch.cat((images.permute(0,2,1,3).reshape(1000,32,96),rand_test),dim=1)
             output = model(images)
             pred = output.data.max(1, keepdim=True)[1]
             correct += pred.eq(labels.data.view_as(pred)).sum()
@@ -104,9 +104,7 @@ def test_esn(data_loader, classifier, scaler):
     activations, ys = [], []
     for images, labels in tqdm(data_loader):
         images = images.to(device)
-        images = torch.cat((images.permute(0,2,1,3).reshape(1000,32,96),rand_test),dim=1).permute(1,0,2)
-        if not args.no_friction:
-            images = images.permute(1, 0, 2)
+        images = torch.cat((images.permute(0,2,1,3).reshape(1000,32,96),rand_test),dim=1)
         output = model(images)[-1][0]
         activations.append(output.cpu())
         ys.append(labels)
@@ -119,9 +117,7 @@ if args.esn:
     activations, ys = [], []
     for images, labels in tqdm(train_loader):
         images = images.to(device)
-        images = torch.cat((images.permute(0,2,1,3).reshape(args.batch,32,96),rand_train),dim=1).permute(1,0,2)
-        if not args.no_friction:
-            images = images.permute(1, 0, 2)
+        images = torch.cat((images.permute(0,2,1,3).reshape(args.batch,32,96),rand_train),dim=1)
         output = model(images)[-1][0]
         activations.append(output.cpu())
         ys.append(labels)
@@ -131,7 +127,7 @@ if args.esn:
     activations = scaler.transform(activations)
     classifier = LogisticRegression(max_iter=1000).fit(activations, ys)
     valid_acc = test_esn(valid_loader, classifier, scaler)
-    test_acc = test_esn(test_loader, classifier, scaler)
+    test_acc = test_esn(test_loader, classifier, scaler) if args.use_test else 0.0
 else:
     best_eval = 0.
     for epoch in range(args.epochs):
@@ -140,7 +136,7 @@ else:
         for images, labels in tqdm(train_loader):
             images, labels = images.to(device), labels.to(device)
             ## Reshape images for sequence learning:
-            images = torch.cat((images.permute(0,2,1,3).reshape(args.batch,32,96),rand_train),dim=1).permute(1,0,2)
+            images = torch.cat((images.permute(0,2,1,3).reshape(args.batch,32,96),rand_train),dim=1)
             # Training pass
             optimizer.zero_grad()
             output = model(images)
@@ -149,7 +145,7 @@ else:
             optimizer.step()
 
         valid_acc = test(valid_loader)
-        test_acc = test(test_loader)
+        test_acc = test(test_loader) if args.use_test else 0.0
         if valid_acc > best_eval:
             best_eval = valid_acc
             final_test_acc = test_acc

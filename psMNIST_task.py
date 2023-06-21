@@ -40,6 +40,7 @@ parser.add_argument('--rho', type=float, default=0.99,
                     help='ESN spectral radius')
 parser.add_argument('--leaky', type=float, default=1.0,
                     help='ESN spectral radius')
+parser.add_argument('--use_test', action="store_true")
 
 args = parser.parse_args()
 print(args)
@@ -63,7 +64,7 @@ if args.esn and not args.no_friction:
 elif args.esn and args.no_friction:
 
     model = coESN(n_inp, args.n_hid, args.dt, gamma, epsilon, args.rho,
-                          args.inp_scaling, device=device).to(device)
+                  args.inp_scaling, device=device).to(device)
     if args.check:
         check_passed = check(model)
         print("Check: ", check_passed)
@@ -71,7 +72,7 @@ elif args.esn and args.no_friction:
             raise ValueError("Check not passed.")
 else:
     model = coRNN(n_inp, args.n_hid, n_out,args.dt,gamma,epsilon,
-                          no_friction=args.no_friction, device=device).to(device)
+                  no_friction=args.no_friction, device=device).to(device)
 
 train_loader, valid_loader, test_loader = get_mnist_data(args.batch,bs_test)
 
@@ -88,8 +89,8 @@ def test(data_loader):
             images, labels = images.to(device), labels.to(device)
             i += 1
             images = images.reshape(bs_test, 1, 784)
-            images = images.permute(2, 0, 1)
-            images = images[perm, :, :]
+            images = images.permute(0, 2, 1)
+            images = images[:, perm, :]
 
             output = model(images)
             test_loss += objective(output, labels).item()
@@ -106,9 +107,8 @@ def test_esn(data_loader, classifier, scaler):
     for images, labels in tqdm(data_loader):
         images = images.to(device)
         images = images.reshape(bs_test, 1, 784)
-        images = images.permute(2, 0, 1)[perm, :, :]
-        if not args.no_friction:
-            images = images.permute(1, 0, 2)
+        images = images.permute(0, 2, 1)
+        images = images[:, perm, :]
         output = model(images)[-1][0]
         activations.append(output.cpu())
         ys.append(labels)
@@ -123,9 +123,8 @@ if args.esn:
         images = images.to(device)
         ## Reshape images for sequence learning:
         images = images.reshape(args.batch, 1, 784)
-        images = images.permute(2, 0, 1)[perm, :, :]
-        if not args.no_friction:
-            images = images.permute(1, 0, 2)
+        images = images.permute(0, 2, 1)
+        images = images[:, perm, :]
         output = model(images)[-1][0]
         activations.append(output.cpu())
         ys.append(labels)
@@ -135,7 +134,7 @@ if args.esn:
     activations = scaler.transform(activations)
     classifier = LogisticRegression(max_iter=1000).fit(activations, ys)
     valid_acc = test_esn(valid_loader, classifier, scaler)
-    test_acc = test_esn(test_loader, classifier, scaler)
+    test_acc = test_esn(test_loader, classifier, scaler) if args.use_test else 0.0
 else:
     for epoch in range(args.epochs):
         print(f"Epoch {epoch}")
@@ -143,8 +142,8 @@ else:
         for images, labels in tqdm(train_loader):
             images, labels = images.to(device), labels.to(device)
             images = images.reshape(args.batch, 1, 784)
-            images = images.permute(2, 0, 1)[perm, :, :]
-
+            images = images.permute(0, 2, 1)
+            images = images[:, perm, :]
             optimizer.zero_grad()
             output = model(images)
             loss = objective(output, labels)
@@ -152,7 +151,7 @@ else:
             optimizer.step()
 
         valid_acc = test(valid_loader)
-        test_acc = test(test_loader)
+        test_acc = test(test_loader) if args.use_test else 0.0
 
         Path(main_folder).mkdir(parents=True, exist_ok=True)
         if args.no_friction:

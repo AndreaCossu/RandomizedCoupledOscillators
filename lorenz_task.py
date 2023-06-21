@@ -13,7 +13,7 @@ parser.add_argument('--n_hid', type=int, default=256,
                     help='hidden size of recurrent net')
 parser.add_argument('--epochs', type=int, default=120,
                     help='max epochs')
-parser.add_argument('--batch', type=int, default=120,
+parser.add_argument('--batch', type=int, default=128,
                     help='batch size')
 parser.add_argument('--lr', type=float, default=0.0054,
                     help='learning rate')
@@ -37,6 +37,7 @@ parser.add_argument('--rho', type=float, default=0.99,
 parser.add_argument('--leaky', type=float, default=1.0,
                     help='ESN spectral radius')
 parser.add_argument('--alpha', type=float, default=0.0)
+parser.add_argument('--use_test', action="store_true")
 
 
 args = parser.parse_args()
@@ -62,23 +63,21 @@ if not args.no_friction:
 else:
 
     model = coESN(n_inp, args.n_hid, args.dt, gamma, epsilon, args.rho,
-                          args.inp_scaling, device=device).to(device)
+                  args.inp_scaling, device=device).to(device)
     if args.check:
         check_passed = check(model)
         print("Check: ", check_passed)
         if not check_passed:
             raise ValueError("Check not passed.")
 
-train_dataset = get_lorenz(5, 8, 128)
-valid_dataset = get_lorenz(5, 8, 128)
-test_dataset = get_lorenz(5, 8, 128)
+train_dataset = get_lorenz(N=5, F=8, num_batch=args.batch, lag=lag, washout=washout)
+valid_dataset = get_lorenz(N=5, F=8, num_batch=args.batch, lag=lag, washout=washout)
+test_dataset = get_lorenz(N=5, F=8, num_batch=args.batch, lag=lag, washout=washout)
 
 @torch.no_grad()
 def test_esn(dataset, classifier, scaler):
-    target = dataset[(lag+washout):].permute(1, 0, 2).numpy().reshape(-1, 5)
-    dataset = dataset[:(2000+washout)].to(device)
-    if not args.no_friction:
-        dataset = dataset.permute(1, 0, 2)
+    target = dataset[:, (lag+washout):].numpy().reshape(-1, 5)
+    dataset = dataset[:, :(2000+washout)].to(device)
     activations = model(dataset)[0].cpu().numpy()
     activations = activations[:, washout:]
     activations = activations.reshape(-1, args.n_hid)
@@ -90,10 +89,8 @@ def test_esn(dataset, classifier, scaler):
     nrmse = rmse / (norm + 1e-9)
     return nrmse
 
-target = train_dataset[(lag+washout):].permute(1, 0, 2).numpy().reshape(-1, 5)
-dataset = train_dataset[:(2000+washout)].to(device)
-if not args.no_friction:
-    dataset = dataset.permute(1, 0, 2)
+target = train_dataset[:, (lag+washout):].numpy().reshape(-1, 5)
+dataset = train_dataset[:, :(2000+washout)].to(device)
 activations = model(dataset)[0].cpu().numpy()
 activations = activations[:, washout:]
 activations = activations.reshape(-1, args.n_hid)
@@ -101,7 +98,7 @@ scaler = preprocessing.StandardScaler().fit(activations)
 activations = scaler.transform(activations)
 classifier = Ridge(alpha=args.alpha, max_iter=1000).fit(activations, target)
 valid_nmse = test_esn(valid_dataset, classifier, scaler)
-test_nmse = test_esn(test_dataset, classifier, scaler)
+test_nmse = test_esn(test_dataset, classifier, scaler) if args.use_test else 0.0
 
 if args.no_friction: # coESN
     f = open(f'{main_folder}/lorenz_log_coESN.txt', 'a')
