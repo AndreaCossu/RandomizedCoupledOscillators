@@ -136,6 +136,7 @@ else:
         model.train()
         for images, labels in tqdm(train_loader):
             images, labels = images.to(device), labels.to(device)
+            print(images.shape, args.batch)
             ## Reshape images for sequence learning:
             images = torch.cat((images.permute(0,2,1,3).reshape(args.batch,32,96),rand_train),dim=1)
             # Training pass

@@ -126,15 +126,18 @@ def get_cifar_data(bs_train,bs_test):
     # Data loader
     train_loader = torch.utils.data.DataLoader(dataset=train_dataset,
                                                batch_size=bs_train,
-                                               shuffle=True)
+                                               shuffle=True,
+                                               drop_last=True)
 
     valid_loader = torch.utils.data.DataLoader(dataset=valid_dataset,
-                                              batch_size=bs_test,
-                                              shuffle=False)
+                                               batch_size=bs_test,
+                                               shuffle=False,
+                                               drop_last=True)
 
     test_loader = torch.utils.data.DataLoader(dataset=test_dataset,
                                               batch_size=bs_test,
-                                              shuffle=False)
+                                              shuffle=False,
+                                              drop_last=True)
 
     return train_loader, valid_loader, test_loader
 
