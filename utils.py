@@ -27,7 +27,7 @@ class coRNNCell(nn.Module):
         else:
             i2h_inp = torch.cat((x, hz, hy), 1)
         hz = hz + self.dt * (torch.tanh(self.i2h(i2h_inp))
-                                   - self.gamma * hy - self.epsilon * hz)
+                             - self.gamma * hy - self.epsilon * hz)
         hy = hy + self.dt * hz
 
         return hy, hz

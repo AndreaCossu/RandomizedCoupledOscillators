@@ -45,6 +45,7 @@ parser.add_argument('--use_test', action="store_true")
 args = parser.parse_args()
 print(args)
 
+
 n_inp = 1
 n_out = 10
 bs_test = 1000
@@ -62,7 +63,6 @@ if args.esn and not args.no_friction:
                           connectivity_recurrent=args.n_hid,
                           connectivity_input=args.n_hid, leaky=args.leaky).to(device)
 elif args.esn and args.no_friction:
-
     model = coESN(n_inp, args.n_hid, args.dt, gamma, epsilon, args.rho,
                   args.inp_scaling, device=device).to(device)
     if args.check:
