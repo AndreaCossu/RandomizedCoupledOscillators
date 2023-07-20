@@ -7,6 +7,18 @@ from torch import nn
 from esn import spectral_norm_scaling
 
 
+class LSTM(nn.Module):
+    def __init__(self, n_inp, n_hid, n_out):
+        super().__init__()
+        self.lstm = torch.nn.LSTM(n_inp, n_hid, batch_first=True)
+        self.readout = torch.nn.Linear(n_hid, n_out)
+
+    def forward(self, x):
+        out, h = self.lstm(x)
+        out = self.readout(out[:, -1])
+        return out
+
+
 class coRNNCell(nn.Module):
     def __init__(self, n_inp, n_hid, dt, gamma, epsilon, no_friction=False, device='cpu'):
         super(coRNNCell, self).__init__()
@@ -141,7 +153,7 @@ def get_cifar_data(bs_train,bs_test):
 
     return train_loader, valid_loader, test_loader
 
-def get_lorenz(N, F, num_batch=128, lag=25, washout=200):
+def get_lorenz(N, F, num_batch=128, lag=25, washout=200, window_size=0):
     # https://en.wikipedia.org/wiki/Lorenz_96_model
     def L96(x, t):
         """Lorenz 96 model with constant forcing"""
@@ -161,7 +173,57 @@ def get_lorenz(N, F, num_batch=128, lag=25, washout=200):
         dataset.append(x)
     dataset = np.stack(dataset, axis=0)  # (num_batch, 2000, 5)
     dataset = torch.from_numpy(dataset).float()
-    return dataset
+
+    if window_size > 0:
+        windows, targets = [], []
+        for i in range(dataset.shape[0]):
+            w, t = get_fixed_length_windows(dataset[i], window_size, prediction_lag=lag)
+        windows.append(w)
+        targets.append(t)
+        return torch.utils.data.TensorDataset(torch.cat(windows, dim=0), torch.cat(targets, dim=0))
+    else:
+        return dataset
+
+
+def get_mackey_glass(washout=200, window_size=0):
+    """
+    Predict next-item of mackey-glass series
+    """
+    with open('mackey-glass.csv', 'r') as f:
+        dataset = f.readlines()[0]  # single line file
+
+    # 10k steps
+    dataset = torch.tensor([float(el) for el in dataset.split(',')]).float()
+
+    if window_size > 0:
+        assert washout == 0
+        dataset, targets = get_fixed_length_windows(dataset, window_size, prediction_lag=1)
+
+    end_train = int(dataset.shape[0] / 2)
+    end_val = end_train + int(dataset.shape[0] / 4)
+    end_test = dataset.shape[0]
+
+    if window_size > 0:
+        train_dataset = dataset[:end_train]
+        train_target = targets[:end_train]
+
+        val_dataset = dataset[end_train:end_val]
+        val_target = targets[end_train:end_val]
+
+        test_dataset = dataset[end_val:end_test]
+        test_target = targets[end_val:end_test]
+    else:
+        train_dataset = dataset[:end_train-1]
+        train_target = dataset[washout+1:end_train]
+
+        val_dataset = dataset[end_train:end_val-1]
+        val_target = dataset[end_train+washout+1:end_val]
+
+        test_dataset = dataset[end_val:end_test-1]
+        test_target = dataset[end_val+washout+1:end_test]
+
+    return (train_dataset, train_target), (val_dataset, val_target), (test_dataset, test_target)
+
 
 def get_mnist_data(bs_train,bs_test):
     train_dataset = torchvision.datasets.MNIST(root='data/',
@@ -189,6 +251,18 @@ def get_mnist_data(bs_train,bs_test):
                                               shuffle=False)
 
     return train_loader, valid_loader, test_loader
+
+
+def get_fixed_length_windows(tensor, length, prediction_lag=1):
+    assert len(tensor.shape) <= 2
+    if len(tensor.shape) == 1:
+        tensor = tensor.unsqueeze(-1)
+
+    windows = tensor[:-prediction_lag].unfold(0, length, 1)
+    windows = windows.permute(0, 2, 1)
+
+    targets = tensor[length+prediction_lag-1:]
+    return windows, targets  # input (B, L, I), target, (B, I)
 
 
 @torch.no_grad()

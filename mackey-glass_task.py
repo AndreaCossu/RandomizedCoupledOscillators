@@ -4,7 +4,7 @@ import argparse
 from esn import DeepReservoir
 from sklearn import preprocessing
 from sklearn.linear_model import Ridge
-from utils import get_lorenz, coESN, check
+from utils import get_mackey_glass, coESN, check
 
 
 parser = argparse.ArgumentParser(description='training parameters')
@@ -41,10 +41,9 @@ main_folder = 'result'
 
 device = torch.device("cuda") if torch.cuda.is_available() and not args.cpu else torch.device("cpu")
 print("Using device ", device)
-n_inp = 5
-n_out = 5
+n_inp = 1
+n_out = 1
 washout = 200
-lag = 25
 
 gamma = (args.gamma - args.gamma_range / 2., args.gamma + args.gamma_range / 2.)
 epsilon = (args.epsilon - args.epsilon_range / 2., args.epsilon + args.epsilon_range / 2.)
@@ -64,14 +63,12 @@ else:
         if not check_passed:
             raise ValueError("Check not passed.")
 
-train_dataset = get_lorenz(N=5, F=8, lag=lag, washout=washout)
-valid_dataset = get_lorenz(N=5, F=8, lag=lag, washout=washout)
-test_dataset = get_lorenz(N=5, F=8, lag=lag, washout=washout)
+(train_dataset, train_target), (valid_dataset, valid_target), (test_dataset, test_target) = get_mackey_glass()
 
 @torch.no_grad()
-def test_esn(dataset, classifier, scaler):
-    target = dataset[:, (lag+washout):].numpy().reshape(-1, 5)
-    dataset = dataset[:, :(2000+washout)].to(device)
+def test_esn(dataset, target, classifier, scaler):
+    dataset = dataset.reshape(1, -1, 1).to(device)
+    target = target.reshape(-1, 1).numpy()
     activations = model(dataset)[0].cpu().numpy()
     activations = activations[:, washout:]
     activations = activations.reshape(-1, args.n_hid)
@@ -83,21 +80,21 @@ def test_esn(dataset, classifier, scaler):
     nrmse = rmse / (norm + 1e-9)
     return nrmse
 
-target = train_dataset[:, (lag+washout):].numpy().reshape(-1, 5)
-dataset = train_dataset[:, :(2000+washout)].to(device)
+dataset = train_dataset.reshape(1, -1, 1).to(device)
+target = train_target.reshape(-1, 1).numpy()
 activations = model(dataset)[0].cpu().numpy()
 activations = activations[:, washout:]
 activations = activations.reshape(-1, args.n_hid)
 scaler = preprocessing.StandardScaler().fit(activations)
 activations = scaler.transform(activations)
 classifier = Ridge(alpha=args.alpha, max_iter=1000).fit(activations, target)
-valid_nmse = test_esn(valid_dataset, classifier, scaler)
-test_nmse = test_esn(test_dataset, classifier, scaler) if args.use_test else 0.0
+valid_nmse = test_esn(valid_dataset, valid_target, classifier, scaler)
+test_nmse = test_esn(test_dataset, test_target, classifier, scaler) if args.use_test else 0.0
 
 if args.no_friction: # coESN
-    f = open(f'{main_folder}/lorenz_log_coESN.txt', 'a')
+    f = open(f'{main_folder}/mackey_log_coESN.txt', 'a')
 else: # ESN
-    f = open(f'{main_folder}/lorenz_log_esn.txt', 'a')
+    f = open(f'{main_folder}/mackey_log_esn.txt', 'a')
 ar = ''
 for k, v in vars(args).items():
     ar += f'{str(k)}: {str(v)}, '
