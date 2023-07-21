@@ -1,6 +1,7 @@
 from scipy.integrate import odeint
 import numpy as np
 import torch
+import os
 import torchvision
 import torchvision.transforms as transforms
 from torch import nn
@@ -251,6 +252,77 @@ def get_mnist_data(bs_train,bs_test):
                                               shuffle=False)
 
     return train_loader, valid_loader, test_loader
+
+
+def load_har(root):
+    """
+    Dataset preprocessing code adapted from
+    https://github.com/guillaume-chevalier/LSTM-Human-Activity-Recognition/blob/master/LSTM.ipynb
+    LABELS = [
+        "WALKING",
+        "WALKING_UPSTAIRS",
+        "WALKING_DOWNSTAIRS",
+        "SITTING",
+        "STANDING",
+        "LAYING"
+    ]
+    """
+    INPUT_SIGNAL_TYPES = [
+        "body_acc_x_",
+        "body_acc_y_",
+        "body_acc_z_",
+        "body_gyro_x_",
+        "body_gyro_y_",
+        "body_gyro_z_",
+        "total_acc_x_",
+        "total_acc_y_",
+        "total_acc_z_"
+    ]
+    # FROM LABELS IDX (starting from 1) TO BINARY CLASSES (0-1)
+    CLASS_MAP = {1: 1, 2: 0, 3: 1, 4: 0, 5: 1, 6: 0}
+    TRAIN = "train"
+    TEST = "test"
+
+    def load_X(X_signals_paths):
+        X_signals = []
+
+        for signal_type_path in X_signals_paths:
+            with open(signal_type_path, 'r') as file:
+                X_signals.append(
+                    [np.array(serie, dtype=np.float32) for serie in [
+                        row.replace('  ', ' ').strip().split(' ') for row in file
+                    ]]
+                )
+
+        return np.transpose(np.array(X_signals), (1, 2, 0))
+
+    def load_y(y_path):
+        with open(y_path, 'r') as file:
+            y_ = np.array(
+                [CLASS_MAP[int(row)] for row in file],
+                dtype=np.int32
+            )
+        return y_
+
+
+    X_train_signals_paths = [
+        os.path.join(root, TRAIN, "Inertial Signals", signal+"train.txt") for signal in INPUT_SIGNAL_TYPES
+    ]
+    X_test_signals_paths = [
+        os.path.join(root, TEST, "Inertial Signals", signal+"test.txt") for signal in INPUT_SIGNAL_TYPES
+    ]
+
+    X_train = load_X(X_train_signals_paths)
+    X_test = load_X(X_test_signals_paths)
+
+    y_train = load_y(os.path.join(root, TRAIN, "y_train.txt"))
+    y_test = load_y(os.path.join(root, TEST, "y_test.txt"))
+
+    train_dataset = torch.utils.data.TensorDataset(torch.from_numpy(X_train).float(), torch.from_numpy(y_train).long())
+    test_dataset = torch.utils.data.TensorDataset(torch.from_numpy(X_test).float(), torch.from_numpy(y_test).long())
+    val_length = int(len(train_dataset) * 0.3)
+    train_dataset, val_dataset = torch.utils.data.random_split(train_dataset, [len(train_dataset)-val_length, val_length])
+    return train_dataset, val_dataset, test_dataset
 
 
 def get_fixed_length_windows(tensor, length, prediction_lag=1):
