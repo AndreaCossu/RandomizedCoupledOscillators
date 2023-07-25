@@ -8,7 +8,7 @@ from sklearn import preprocessing
 
 parser = argparse.ArgumentParser(description='training parameters')
 
-parser.add_argument('root', type=str, default='data/har',
+parser.add_argument('--root', type=str, default='data/har',
                     help='root directory of the dataset')
 parser.add_argument('--n_hid', type=int, default=64,
                     help='hidden size of recurrent net')
@@ -45,7 +45,7 @@ args = parser.parse_args()
 print(args)
 
 n_inp = 9
-n_out = 1
+n_out = 2
 
 main_folder = 'result'
 
@@ -58,7 +58,7 @@ if args.esn and not args.no_friction:
                           input_scaling=args.inp_scaling,
                           connectivity_recurrent=args.n_hid,
                           connectivity_input=args.n_hid, leaky=args.leaky).to(device)
-elif args.esn and args.no_friction:
+elif args.no_friction and args.esn:
     model = coESN(n_inp, args.n_hid, args.dt, gamma, epsilon, args.rho,
                   args.inp_scaling, device=device).to(device)
     if args.check:
@@ -79,27 +79,24 @@ valid_loader = torch.utils.data.DataLoader(val_dataset, batch_size=args.batch,
 test_loader = torch.utils.data.DataLoader(test_dataset, batch_size=args.batch,
                                           shuffle=False, drop_last=False)
 
-objective = torch.nn.BCEWithLogitsLoss()
+objective = torch.nn.CrossEntropyLoss()
 
 def binary_accuracy(preds, y):
-    rounded_preds = torch.round(torch.sigmoid(preds))
-    correct = (rounded_preds == y).float()  # convert into float for division
+    preds = torch.argmax(preds, dim=1)
+    correct = (preds == y).float()  # convert into float for division
     acc = correct.sum() / float(len(correct))
-    return acc
+    return acc.item()
 
-
+@torch.no_grad()
 def test(dataloader):
     epoch_acc = 0
     model.eval()
-    with torch.no_grad():
-        for i, (data, labels) in enumerate(dataloader):
-            predictions = model(data)
-            acc = binary_accuracy(predictions, labels)
-            epoch_acc += acc.item()
-    accuracy = epoch_acc / len(dataloader)
-    return accuracy.item()
+    for i, (data, labels) in enumerate(dataloader):
+        predictions = model(data.to(device))
+        epoch_acc += binary_accuracy(predictions.cpu(), labels)
+    return epoch_acc / float(len(dataloader))
 
-
+@torch.no_grad()
 def test_esn(dataloader, scaler, classifier):
     outputs, labels = [], []
     for data, l in dataloader:
@@ -125,10 +122,10 @@ if args.esn:
     activations = scaler.transform(outputs)
     classifier = LogisticRegression(max_iter=1000).fit(activations, labels)
     acc = classifier.score(activations, labels)
-    eval_acc = test_esn(valid_loader)
-    test_acc = test_esn(test_loader) if args.use_test else 0.0
+    eval_acc = test_esn(valid_loader, scaler, classifier)
+    test_acc = test_esn(test_loader, scaler, classifier) if args.use_test else 0.0
 
-    train_accs.append(acc.item())
+    train_accs.append(acc)
     val_accs.append(eval_acc)
     test_accs.append(test_acc)
 else:
@@ -137,13 +134,12 @@ else:
         model.train()
         for data, labels in tqdm(train_loader):
             optimizer.zero_grad()
-            output = model(data)
-            loss = objective(output, labels)
+            output = model(data.to(device))
+            loss = objective(output, labels.to(device))
             loss.backward()
             optimizer.step()
-            acc = binary_accuracy(output, labels)
-            epoch_acc += acc.item()
-        epoch_acc /= len(train_loader)
+            epoch_acc += binary_accuracy(output.cpu(), labels)
+        epoch_acc /= float(len(train_loader))
 
         eval_acc = test(valid_loader)
         test_acc = test(test_loader) if args.use_test else 0.0
@@ -156,16 +152,16 @@ else:
 if args.no_friction and args.esn: # coESN
     f = open(f'{main_folder}/har_log_coESN.txt', 'a')
 elif args.no_friction: # coRNN
-    f = open(f'{main_folder}/har_log_cornn.txt', 'a')
+    f = open(f'{main_folder}/har_log_hcornn.txt', 'a')
 elif args.esn: # ESN
     f = open(f'{main_folder}/har_log_esn.txt', 'a')
 else:
-    raise ValueError("Wrong model parameters")
+    f = open(f'{main_folder}/har_log_cornn.txt', 'a')
 
 ar = ''
 for k, v in vars(args).items():
     ar += f'{str(k)}: {str(v)}, '
-ar += f'train_list: {[str(round(el, 5)) for el in train_accs]}, valid_list: {[str(round(el, 5)) for el in val_accs]}, test_list: {[str(round(el, 5)) for el in test_accs]} train: {str(round(min(train_accs), 5))} valid: {str(round(min(val_accs), 5))}, test: {str(round(min(test_accs), 5))}'
+ar += f'train_list: {[str(round(el, 5)) for el in train_accs]}, valid_list: {[str(round(el, 5)) for el in val_accs]}, test_list: {[str(round(el, 5)) for el in test_accs]} train: {str(round(max(train_accs), 5))} valid: {str(round(max(val_accs), 5))}, test: {str(round(max(test_accs), 5))}'
 f.write(ar + '\n')
 f.write('**************\n\n\n')
 f.close()
