@@ -1,6 +1,6 @@
 from torch import nn, optim
 import torch
-from utils import get_cifar_data, coESN, coRNN, check
+from utils import get_cifar_data, coESN, coRNN, check, LSTM
 import argparse
 import torch.nn.utils
 from pathlib import Path
@@ -40,6 +40,7 @@ parser.add_argument('--rho', type=float, default=0.99,
                     help='ESN spectral radius')
 parser.add_argument('--leaky', type=float, default=1.0,
                     help='ESN spectral radius')
+parser.add_argument('lstm', action="use lstm model")
 parser.add_argument('use_test', action="store_true")
 
 args = parser.parse_args()
@@ -55,13 +56,14 @@ n_out = 10
 gamma = (args.gamma - args.gamma_range / 2., args.gamma + args.gamma_range / 2.)
 epsilon = (args.epsilon - args.epsilon_range / 2., args.epsilon + args.epsilon_range / 2.)
 
-if args.esn and not args.no_friction:
+if args.lstm:
+    model = LSTM(n_inp, args.n_hid, n_out).to(device)
+elif args.esn and not args.no_friction:
     model = DeepReservoir(n_inp, tot_units=args.n_hid, spectral_radius=args.rho,
                           input_scaling=args.inp_scaling,
                           connectivity_recurrent=args.n_hid,
                           connectivity_input=args.n_hid, leaky=args.leaky).to(device)
 elif args.esn and args.no_friction:
-
     model = coESN(n_inp, args.n_hid, args.dt, gamma, epsilon, args.rho,
                   args.inp_scaling, device=device).to(device)
     if args.check:
