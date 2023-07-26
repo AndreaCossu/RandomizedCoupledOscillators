@@ -1,6 +1,6 @@
 import torch
 import argparse
-from utils import load_har, coRNN, check, coESN
+from utils import load_har, coRNN, check, coESN, LSTM
 from esn import DeepReservoir
 from tqdm import tqdm
 from sklearn.linear_model import LogisticRegression
@@ -38,6 +38,7 @@ parser.add_argument('--rho', type=float, default=0.99,
                     help='ESN spectral radius')
 parser.add_argument('--leaky', type=float, default=1.0,
                     help='ESN spectral radius')
+parser.add_argument('--lstm', action="store_true")
 parser.add_argument('--use_test', action="store_true")
 
 
@@ -53,7 +54,10 @@ device = torch.device("cuda") if torch.cuda.is_available() and not args.cpu else
 gamma = (args.gamma - args.gamma_range / 2., args.gamma + args.gamma_range / 2.)
 epsilon = (args.epsilon - args.epsilon_range / 2., args.epsilon + args.epsilon_range / 2.)
 
-if args.esn and not args.no_friction:
+if args.lstm:
+    model = LSTM(n_inp, args.n_hid, n_out).to(device)
+    optimizer = torch.optim.Adam(model.parameters(), lr=args.lr)
+elif args.esn and not args.no_friction:
     model = DeepReservoir(n_inp, tot_units=args.n_hid, spectral_radius=args.rho,
                           input_scaling=args.inp_scaling,
                           connectivity_recurrent=args.n_hid,
@@ -148,8 +152,9 @@ else:
         val_accs.append(eval_acc)
         test_accs.append(test_acc)
 
-
-if args.no_friction and args.esn: # coESN
+if args.lstm:
+    f = open(f'{main_folder}/har_log_lstm.txt', 'a')
+elif args.no_friction and args.esn: # coESN
     f = open(f'{main_folder}/har_log_coESN.txt', 'a')
 elif args.no_friction: # coRNN
     f = open(f'{main_folder}/har_log_hcornn.txt', 'a')

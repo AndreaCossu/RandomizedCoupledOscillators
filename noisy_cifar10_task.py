@@ -172,7 +172,9 @@ else:
             for param_group in optimizer.param_groups:
                 param_group['lr'] = args.lr
 
-if args.no_friction and (not args.esn): # coRNN without friction
+if args.lstm:
+    f = open(f'{main_folder}/cifar_log_lstm.txt', 'a')
+elif args.no_friction and (not args.esn): # coRNN without friction
     f = open(f'{main_folder}/cifar_log_no_friction.txt', 'a')
 elif args.esn and args.no_friction: # coESN
     f = open(f'{main_folder}/cifar_log_coESN.txt', 'a')
