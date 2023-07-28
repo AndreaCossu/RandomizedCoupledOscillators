@@ -39,7 +39,7 @@ parser.add_argument('--rho', type=float, default=0.99,
                     help='ESN spectral radius')
 parser.add_argument('--leaky', type=float, default=1.0,
                     help='ESN spectral radius')
-parser.add_argument('--lstm', action="use LSTM")
+parser.add_argument('--lstm', action="store_true")
 parser.add_argument('--use_test', action="store_true")
 
 
@@ -58,6 +58,9 @@ epsilon = (args.epsilon - args.epsilon_range / 2., args.epsilon + args.epsilon_r
 
 if args.lstm:
     model = LSTM(n_inp, args.n_hid, n_out).to(device)
+    torch.nn.init.uniform_(model.lstm.bias_ih_l0, -4, 4)
+    optimizer = optim.Adam(model.parameters(), lr=args.lr)
+
 elif args.esn and not args.no_friction:
     model = DeepReservoir(n_inp, tot_units=args.n_hid, spectral_radius=args.rho,
                           input_scaling=args.inp_scaling,
@@ -75,10 +78,11 @@ elif args.esn and args.no_friction:
 else:
     model = coRNN(n_inp, args.n_hid, n_out,args.dt,gamma,epsilon,
                   no_friction=args.no_friction, device=device).to(device)
+    optimizer = optim.Adam(model.parameters(), lr=args.lr)
+
 train_loader, valid_loader, test_loader = get_mnist_data(args.batch,bs_test)
 
 objective = nn.CrossEntropyLoss()
-optimizer = optim.Adam(model.parameters(), lr=args.lr)
 
 def test(data_loader):
     model.eval()
@@ -120,7 +124,7 @@ if args.esn:
     for images, labels in tqdm(train_loader):
         images = images.to(device)
         ## Reshape images for sequence learning:
-        images = images.reshape(args.batch, 1, 784)
+        images = images.reshape(images.shape[0], 1, 784)
         images = images.permute(0, 2, 1)
         output = model(images)[-1][0]
         activations.append(output.cpu())
@@ -138,7 +142,7 @@ else:
         model.train()
         for images, labels in tqdm(train_loader):
             images, labels = images.to(device), labels.to(device)
-            images = images.reshape(args.batch, 1, 784)
+            images = images.reshape(images.shape[0], 1, 784)
             images = images.permute(0, 2, 1)
 
             optimizer.zero_grad()

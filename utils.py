@@ -11,7 +11,8 @@ from esn import spectral_norm_scaling
 class LSTM(nn.Module):
     def __init__(self, n_inp, n_hid, n_out):
         super().__init__()
-        self.lstm = torch.nn.LSTM(n_inp, n_hid, batch_first=True)
+        self.lstm = torch.nn.LSTM(n_inp, n_hid, batch_first=True,
+                                  num_layers=1)
         self.readout = torch.nn.Linear(n_hid, n_out)
 
     def forward(self, x):
@@ -172,7 +173,7 @@ def get_lorenz(N, F, num_batch=128, lag=25, washout=200, window_size=0):
         x0 = np.random.rand(N) + F - 0.5 # [F-0.5, F+0.5]
         x = odeint(L96, x0, t)
         dataset.append(x)
-    dataset = np.stack(dataset, axis=0)  # (num_batch, 2000, 5)
+    dataset = np.stack(dataset, axis=0)
     dataset = torch.from_numpy(dataset).float()
 
     if window_size > 0:

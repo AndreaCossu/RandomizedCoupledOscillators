@@ -31,6 +31,7 @@ parser.add_argument('--rho', type=float, default=0.99,
 parser.add_argument('--leaky', type=float, default=1.0,
                     help='ESN spectral radius')
 parser.add_argument('--alpha', type=float, default=0.0)
+parser.add_argument('--lag', type=int, default=25)
 parser.add_argument('--use_test', action="store_true")
 
 
@@ -44,7 +45,7 @@ print("Using device ", device)
 n_inp = 5
 n_out = 5
 washout = 200
-lag = 25
+lag = args.lag
 
 gamma = (args.gamma - args.gamma_range / 2., args.gamma + args.gamma_range / 2.)
 epsilon = (args.epsilon - args.epsilon_range / 2., args.epsilon + args.epsilon_range / 2.)

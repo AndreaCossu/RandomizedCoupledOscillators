@@ -107,9 +107,9 @@ def test_esn(dataloader, scaler, classifier):
         output = model(data.to(device))[-1][0]
         outputs.append(output.cpu())
         labels.append(l)
-    outputs = torch.cat(outputs, dim=0).numpy()
+    activations = torch.cat(outputs, dim=0).numpy()
     labels = torch.cat(labels, dim=0).numpy()
-    activations = scaler.transform(outputs)
+    activations = scaler.transform(activations)
     return classifier.score(activations, labels)
 
 
@@ -120,10 +120,10 @@ if args.esn:
         output = model(data.to(device))[-1][0]
         labels.append(l)
         outputs.append(output.cpu())
-    outputs = torch.cat(outputs, dim=0).numpy()
+    activations = torch.cat(outputs, dim=0).numpy()
     labels = torch.cat(labels, dim=0).numpy()
-    scaler = preprocessing.StandardScaler().fit(outputs)
-    activations = scaler.transform(outputs)
+    scaler = preprocessing.StandardScaler().fit(activations)
+    activations = scaler.transform(activations)
     classifier = LogisticRegression(max_iter=1000).fit(activations, labels)
     acc = classifier.score(activations, labels)
     eval_acc = test_esn(valid_loader, scaler, classifier)

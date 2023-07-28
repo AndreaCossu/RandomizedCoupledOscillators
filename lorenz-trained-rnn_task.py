@@ -31,6 +31,7 @@ parser.add_argument('--no_friction', action="store_true")
 parser.add_argument('--lstm', action="store_true")
 parser.add_argument('--cpu', action="store_true")
 parser.add_argument('--check', action="store_true")
+parser.add_argument('--lag', type=int, default=25)
 parser.add_argument('--use_test', action="store_true")
 
 
@@ -43,7 +44,7 @@ device = torch.device("cuda") if torch.cuda.is_available() and not args.cpu else
 print("Using device ", device)
 n_inp = 5
 n_out = 5
-lag = 25
+lag = args.lag
 
 gamma = (args.gamma - args.gamma_range / 2., args.gamma + args.gamma_range / 2.)
 epsilon = (args.epsilon - args.epsilon_range / 2., args.epsilon + args.epsilon_range / 2.)
@@ -68,11 +69,15 @@ test_loader = torch.utils.data.DataLoader(test_dataset, batch_size=args.batch, s
 def test(dataloader):
     model.eval()
     predictions, target = [], []
+    test_loss = 0.
     for x, y in dataloader:
         out = model(x.to(device))
         predictions.append(out.cpu())
+        loss = criterion(out, y.to(device))
         target.append(y)
+        test_loss += loss.item()
 
+    test_loss /= float(len(dataloader))
     predictions = torch.cat(predictions, dim=0).numpy()
     target = torch.cat(target, dim=0).numpy()
     mse = np.mean(np.square(predictions - target))
@@ -84,6 +89,7 @@ def test(dataloader):
 train_losses = []
 val_losses = []
 test_losses = []
+
 for epoch in range(args.epochs):
     model.train()
     train_loss = 0.

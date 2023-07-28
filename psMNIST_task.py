@@ -40,7 +40,7 @@ parser.add_argument('--rho', type=float, default=0.99,
                     help='ESN spectral radius')
 parser.add_argument('--leaky', type=float, default=1.0,
                     help='ESN spectral radius')
-parser.add_argument('--lstm', action="use LSTM")
+parser.add_argument('--lstm', action="store_true")
 parser.add_argument('--use_test', action="store_true")
 
 args = parser.parse_args()
@@ -124,7 +124,7 @@ if args.esn:
     for images, labels in tqdm(train_loader):
         images = images.to(device)
         ## Reshape images for sequence learning:
-        images = images.reshape(args.batch, 1, 784)
+        images = images.reshape(images.shape[0], 1, 784)
         images = images.permute(0, 2, 1)
         images = images[:, perm, :]
         output = model(images)[-1][0]
@@ -143,7 +143,7 @@ else:
         model.train()
         for images, labels in tqdm(train_loader):
             images, labels = images.to(device), labels.to(device)
-            images = images.reshape(args.batch, 1, 784)
+            images = images.reshape(images.shape[0], 1, 784)
             images = images.permute(0, 2, 1)
             images = images[:, perm, :]
             optimizer.zero_grad()
