@@ -21,6 +21,37 @@ class LSTM(nn.Module):
         return out
 
 
+
+class RNN_Separate(nn.Module):
+    def __init__(self, n_inp, n_hid):
+        super().__init__()
+        self.i2h = torch.nn.Linear(n_inp, n_hid)
+        self.h2h = torch.nn.Linear(n_hid, n_hid)
+        self.n_hid = n_hid
+
+    def forward(self, x):
+        states = []
+        state = torch.zeros(x.size(0), self.n_hid, requires_grad=False).to(x.device)
+        for t in range(x.size(1)):
+            state = torch.tanh(self.i2h(x[:, t])) + torch.tanh(self.h2h(state))
+            states.append(state)
+        return torch.stack(states, dim=1), state
+
+class RNN(nn.Module):
+    def __init__(self, n_inp, n_hid, n_out, separate_nonlin=False):
+        super().__init__()
+        if separate_nonlin:
+            self.rnn = RNN_Separate(n_inp, n_hid)
+        else:
+            self.rnn = torch.nn.RNN(n_inp, n_hid, batch_first=True,
+                                    num_layers=1)
+        self.readout = torch.nn.Linear(n_hid, n_out)
+
+    def forward(self, x):
+        out, h = self.rnn(x)
+        out = self.readout(out[:, -1])
+        return out
+
 class coRNNCell(nn.Module):
     def __init__(self, n_inp, n_hid, dt, gamma, epsilon, no_friction=False, device='cpu'):
         super(coRNNCell, self).__init__()
@@ -123,6 +154,8 @@ class coESN(nn.Module):
             all_states.append(hy)
 
         return torch.stack(all_states, dim=1), [hy]  # list to be compatible with ESN implementation
+        # return None, [hy]  # list to be compatible with ESN implementation
+
 
 
 def get_cifar_data(bs_train,bs_test):

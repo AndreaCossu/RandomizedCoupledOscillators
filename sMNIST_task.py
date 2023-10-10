@@ -52,7 +52,7 @@ device = torch.device("cuda") if torch.cuda.is_available() and not args.cpu else
 
 n_inp = 1
 n_out = 10
-bs_test = 1000
+bs_test = 100
 gamma = (args.gamma - args.gamma_range / 2., args.gamma + args.gamma_range / 2.)
 epsilon = (args.epsilon - args.epsilon_range / 2., args.epsilon + args.epsilon_range / 2.)
 

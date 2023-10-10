@@ -1,6 +1,6 @@
 import torch
 import argparse
-from utils import load_har, coRNN, check, coESN, LSTM
+from utils import load_har, coRNN, check, coESN, LSTM, RNN
 from esn import DeepReservoir
 from tqdm import tqdm
 from sklearn.linear_model import LogisticRegression
@@ -55,7 +55,8 @@ gamma = (args.gamma - args.gamma_range / 2., args.gamma + args.gamma_range / 2.)
 epsilon = (args.epsilon - args.epsilon_range / 2., args.epsilon + args.epsilon_range / 2.)
 
 if args.lstm:
-    model = LSTM(n_inp, args.n_hid, n_out).to(device)
+    # model = LSTM(n_inp, args.n_hid, n_out).to(device)
+    model = RNN(n_inp, args.n_hid, n_out, separate_nonlin=False).to(device)
     optimizer = torch.optim.Adam(model.parameters(), lr=args.lr)
 elif args.esn and not args.no_friction:
     model = DeepReservoir(n_inp, tot_units=args.n_hid, spectral_radius=args.rho,

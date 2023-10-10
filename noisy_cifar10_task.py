@@ -40,8 +40,8 @@ parser.add_argument('--rho', type=float, default=0.99,
                     help='ESN spectral radius')
 parser.add_argument('--leaky', type=float, default=1.0,
                     help='ESN spectral radius')
-parser.add_argument('lstm', action="store_true")
-parser.add_argument('use_test', action="store_true")
+parser.add_argument('--lstm', action="store_true")
+parser.add_argument('--use_test', action="store_true")
 
 args = parser.parse_args()
 print(args)
@@ -75,7 +75,7 @@ else:
     model = coRNN(n_inp, args.n_hid, n_out,args.dt,gamma,epsilon,
                   no_friction=args.no_friction, device=device).to(device)
 
-train_loader, valid_loader, test_loader = get_cifar_data(args.batch,1000)
+train_loader, valid_loader, test_loader = get_cifar_data(args.batch,args.batch)
 
 
 ## Define the loss
@@ -84,7 +84,7 @@ optimizer = optim.Adam(model.parameters(), lr=args.lr)
 
 rands = torch.randn(1, 1000 - 32, 96).to(device)
 rand_train = rands.repeat(args.batch,1,1)
-rand_test = rands.repeat(1000,1,1)
+rand_test = rands.repeat(args.batch,1,1)
 
 def test(data_loader):
     print("Starting eval...")
@@ -94,7 +94,7 @@ def test(data_loader):
         for images, labels in tqdm(data_loader):
             images, labels = images.to(device), labels.to(device)
             ## Reshape images for sequence learning:
-            images = torch.cat((images.permute(0,2,1,3).reshape(1000,32,96),rand_test),dim=1)
+            images = torch.cat((images.permute(0,2,1,3).reshape(args.batch,32,96),rand_test),dim=1)
             output = model(images)
             pred = output.data.max(1, keepdim=True)[1]
             correct += pred.eq(labels.data.view_as(pred)).sum()
@@ -107,7 +107,7 @@ def test_esn(data_loader, classifier, scaler):
     activations, ys = [], []
     for images, labels in tqdm(data_loader):
         images = images.to(device)
-        images = torch.cat((images.permute(0,2,1,3).reshape(1000,32,96),rand_test),dim=1)
+        images = torch.cat((images.permute(0,2,1,3).reshape(args.batch,32,96),rand_test),dim=1)
         output = model(images)[-1][0]
         activations.append(output.cpu())
         ys.append(labels)

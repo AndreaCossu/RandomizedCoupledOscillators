@@ -48,7 +48,7 @@ print(args)
 
 n_inp = 1
 n_out = 10
-bs_test = 1000
+bs_test = 100
 
 main_folder = 'result'
 
