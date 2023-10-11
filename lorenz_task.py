@@ -6,7 +6,6 @@ from sklearn import preprocessing
 from sklearn.linear_model import Ridge
 from utils import get_lorenz, coESN, check
 
-
 parser = argparse.ArgumentParser(description='training parameters')
 
 parser.add_argument('--n_hid', type=int, default=256,
@@ -29,7 +28,7 @@ parser.add_argument('--inp_scaling', type=float, default=1.,
 parser.add_argument('--rho', type=float, default=0.99,
                     help='ESN spectral radius')
 parser.add_argument('--leaky', type=float, default=1.0,
-                    help='ESN spectral radius')
+                    help='ESN leakage')
 parser.add_argument('--alpha', type=float, default=0.0)
 parser.add_argument('--lag', type=int, default=1)
 parser.add_argument('--use_test', action="store_true")

@@ -124,17 +124,26 @@ class coESN(nn.Module):
             self.epsilon = epsilon
 
         h2h = 2 * (2 * torch.rand(n_hid, n_hid) - 1)
-        h2h = spectral_norm_scaling(h2h, rho)
+        if gamma_max == gamma_min and eps_min == eps_max and gamma_max == 1:
+            leaky = dt**2
+            I = torch.eye(self.n_hid)
+            h2h = h2h * leaky + (I * (1 - leaky))
+            h2h = spectral_norm_scaling(h2h, rho)
+            self.h2h = (h2h + I * (leaky - 1)) * (1 / leaky)
+        else:
+            h2h = spectral_norm_scaling(h2h, rho)
         self.h2h = nn.Parameter(h2h, requires_grad=False)
 
-        x2h = torch.rand(n_inp, n_hid) * input_scaling
+        x2h = 2 * (2 * torch.rand(n_inp, self.n_hid) - 1) * input_scaling
+        # alternative init
+        # x2h = torch.rand(n_inp, n_hid) * input_scaling
         self.x2h = nn.Parameter(x2h, requires_grad=False)
         bias = (torch.rand(n_hid) * 2 - 1) * input_scaling
         self.bias = nn.Parameter(bias, requires_grad=False)
 
     def cell(self, x, hy, hz):
         hz = hz + self.dt * (torch.tanh(
-            torch.matmul(x, self.x2h)  + torch.matmul(hy, self.h2h) + self.bias)
+            torch.matmul(x, self.x2h) + torch.matmul(hy, self.h2h) + self.bias)
                              - self.gamma * hy - self.epsilon * hz)
         if self.fading:
             hz = hz - self.dt * hz
