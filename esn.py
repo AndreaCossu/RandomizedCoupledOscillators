@@ -31,7 +31,7 @@ def sparse_eye_init(M: int) -> torch.FloatTensor:
     for i in range(M):
         indices[i, :] = i
     values = torch.ones(M)
-    return torch.sparse.FloatTensor(indices.T, values, dense_shape).to_dense()
+    return torch.sparse_coo_tensor(indices.T, values, dense_shape).to_dense().float()
 
 
 def sparse_tensor_init(M: int, N: int, C: int = 1) -> torch.FloatTensor:
@@ -57,7 +57,7 @@ def sparse_tensor_init(M: int, N: int, C: int = 1) -> torch.FloatTensor:
             k = k + 1
     values = 2 * (2 * np.random.rand(M * C).astype('f') - 1)
     values = torch.from_numpy(values)
-    return torch.sparse.FloatTensor(indices.T, values, dense_shape).to_dense()
+    return torch.sparse_coo_tensor(indices.T, values, dense_shape).to_dense().float()
 
 
 def sparse_recurrent_tensor_init(M: int, C: int = 1) -> torch.FloatTensor:
@@ -83,7 +83,7 @@ def sparse_recurrent_tensor_init(M: int, C: int = 1) -> torch.FloatTensor:
             k = k + 1
     values = 2 * (2 * np.random.rand(M * C).astype('f') - 1)
     values = torch.from_numpy(values)
-    return torch.sparse.FloatTensor(indices.T, values, dense_shape).to_dense()
+    return torch.sparse_coo_tensor(indices.T, values, dense_shape).to_dense().float()
 
 
 def spectral_norm_scaling(W: torch.FloatTensor, rho_desired: float) -> torch.FloatTensor:
