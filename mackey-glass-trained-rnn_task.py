@@ -31,6 +31,7 @@ parser.add_argument('--cpu', action="store_true")
 parser.add_argument('--check', action="store_true")
 parser.add_argument('--no_friction', action="store_true")
 parser.add_argument('--lstm', action="store_true")
+parser.add_argument('--lag', type=int, default=1)
 parser.add_argument('--use_test', action="store_true")
 
 
@@ -43,6 +44,7 @@ device = torch.device("cuda") if torch.cuda.is_available() and not args.cpu else
 print("Using device ", device)
 n_inp = 1
 n_out = 1
+lag = args.lag
 
 
 gamma = (args.gamma - args.gamma_range / 2., args.gamma + args.gamma_range / 2.)

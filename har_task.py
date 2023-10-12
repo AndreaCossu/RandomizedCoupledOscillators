@@ -125,7 +125,7 @@ if args.esn:
     labels = torch.cat(labels, dim=0).numpy()
     scaler = preprocessing.StandardScaler().fit(activations)
     activations = scaler.transform(activations)
-    classifier = LogisticRegression(max_iter=1000).fit(activations, labels)
+    classifier = LogisticRegression(max_iter=10000).fit(activations, labels)
     acc = classifier.score(activations, labels)
     eval_acc = test_esn(valid_loader, scaler, classifier)
     test_acc = test_esn(test_loader, scaler, classifier) if args.use_test else 0.0

@@ -31,6 +31,7 @@ parser.add_argument('--rho', type=float, default=0.99,
 parser.add_argument('--leaky', type=float, default=1.0,
                     help='ESN spectral radius')
 parser.add_argument('--alpha', type=float, default=0.0)
+parser.add_argument('--lag', type=int, default=1)
 parser.add_argument('--use_test', action="store_true")
 
 
@@ -44,6 +45,7 @@ print("Using device ", device)
 n_inp = 1
 n_out = 1
 washout = 200
+lag = args.lag
 
 gamma = (args.gamma - args.gamma_range / 2., args.gamma + args.gamma_range / 2.)
 epsilon = (args.epsilon - args.epsilon_range / 2., args.epsilon + args.epsilon_range / 2.)
@@ -63,7 +65,7 @@ else:
         if not check_passed:
             raise ValueError("Check not passed.")
 
-(train_dataset, train_target), (valid_dataset, valid_target), (test_dataset, test_target) = get_mackey_glass()
+(train_dataset, train_target), (valid_dataset, valid_target), (test_dataset, test_target) = get_mackey_glass(args.lag)
 
 @torch.no_grad()
 def test_esn(dataset, target, classifier, scaler):

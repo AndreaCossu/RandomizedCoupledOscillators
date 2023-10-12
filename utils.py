@@ -229,7 +229,7 @@ def get_lorenz(N, F, num_batch=128, lag=25, washout=200, window_size=0):
         return dataset
 
 
-def get_mackey_glass(washout=200, window_size=0):
+def get_mackey_glass(lag=1, washout=200, window_size=0):
     """
     Predict next-item of mackey-glass series
     """
@@ -241,13 +241,12 @@ def get_mackey_glass(washout=200, window_size=0):
 
     if window_size > 0:
         assert washout == 0
-        dataset, targets = get_fixed_length_windows(dataset, window_size, prediction_lag=1)
+        dataset, targets = get_fixed_length_windows(dataset, window_size, prediction_lag=lag)
 
-    end_train = int(dataset.shape[0] / 2)
-    end_val = end_train + int(dataset.shape[0] / 4)
-    end_test = dataset.shape[0]
+        end_train = int(dataset.shape[0] / 2)
+        end_val = end_train + int(dataset.shape[0] / 4)
+        end_test = dataset.shape[0]
 
-    if window_size > 0:
         train_dataset = dataset[:end_train]
         train_target = targets[:end_train]
 
@@ -257,14 +256,18 @@ def get_mackey_glass(washout=200, window_size=0):
         test_dataset = dataset[end_val:end_test]
         test_target = targets[end_val:end_test]
     else:
-        train_dataset = dataset[:end_train-1]
-        train_target = dataset[washout+1:end_train]
+        end_train = int(dataset.shape[0] / 2)
+        end_val = end_train + int(dataset.shape[0] / 4)
+        end_test = dataset.shape[0]
 
-        val_dataset = dataset[end_train:end_val-1]
-        val_target = dataset[end_train+washout+1:end_val]
+        train_dataset = dataset[:end_train-lag]
+        train_target = dataset[washout+lag:end_train]
 
-        test_dataset = dataset[end_val:end_test-1]
-        test_target = dataset[end_val+washout+1:end_test]
+        val_dataset = dataset[end_train:end_val-lag]
+        val_target = dataset[end_train+washout+lag:end_val]
+
+        test_dataset = dataset[end_val:end_test-lag]
+        test_target = dataset[end_val+washout+lag:end_test]
 
     return (train_dataset, train_target), (val_dataset, val_target), (test_dataset, test_target)
 
