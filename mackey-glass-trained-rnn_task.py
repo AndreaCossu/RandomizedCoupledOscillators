@@ -15,7 +15,7 @@ parser.add_argument('--lr', type=float, default=1e-3,
                     help='learning rate')
 parser.add_argument('--epochs', type=int, default=30,
                     help='max epochs')
-parser.add_argument('--window_size', type=int, default=200,
+parser.add_argument('--window_size', type=int, default=50,
                     help='size of the input window for rnn')
 parser.add_argument('--dt', type=float, default=0.076,
                     help='step size <dt> of the coRNN')
@@ -46,7 +46,6 @@ n_inp = 1
 n_out = 1
 lag = args.lag
 
-
 gamma = (args.gamma - args.gamma_range / 2., args.gamma + args.gamma_range / 2.)
 epsilon = (args.epsilon - args.epsilon_range / 2., args.epsilon + args.epsilon_range / 2.)
 
@@ -60,7 +59,8 @@ optimizer = torch.optim.Adam(model.parameters(), lr=args.lr)
 criterion = torch.nn.MSELoss()
 
 (train_dataset, train_target), (valid_dataset, valid_target), (test_dataset, test_target) = get_mackey_glass(washout=0,
-                                                                                                             window_size=args.window_size)
+                                                                                                             window_size=args.window_size,
+                                                                                                             lag=args.lag)
 train_dataset = torch.utils.data.TensorDataset(train_dataset, train_target)
 valid_dataset = torch.utils.data.TensorDataset(valid_dataset, valid_target)
 test_dataset = torch.utils.data.TensorDataset(test_dataset, test_target)
