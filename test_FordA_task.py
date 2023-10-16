@@ -1,7 +1,7 @@
 from torch import nn, optim
 import torch
 import torch.nn.utils
-from utils_NEW import get_mnist_data, coRNN, coESN, check, LSTM, get_FordA_data
+from utils import coRNN, coESN, check, LSTM, get_FordA_data
 from pathlib import Path
 import argparse
 from tqdm import tqdm
