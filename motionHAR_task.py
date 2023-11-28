@@ -156,10 +156,6 @@ else:
         print(f"Valid accuracy: ", valid_acc)
         print(f"Test accuracy: ", test_acc)
 
-        if (epoch+1) % 100 == 0:
-            args.lr /= 10.
-            for param_group in optimizer.param_groups:
-                param_group['lr'] = args.lr
 
 if args.lstm:
     f = open(f'{main_folder}/motionHAR_log_lstm.txt', 'a')
