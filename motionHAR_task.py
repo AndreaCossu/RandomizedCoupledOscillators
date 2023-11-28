@@ -9,6 +9,7 @@ from esn import DeepReservoir
 from sklearn import preprocessing
 from sklearn.linear_model import LogisticRegression
 
+# 4k parameters (25 LSTM units)
 
 parser = argparse.ArgumentParser(description='training parameters')
 
@@ -142,7 +143,9 @@ else:
         test_acc = test(test_loader) if args.use_test else 0.0
 
         Path(main_folder).mkdir(parents=True, exist_ok=True)
-        if args.no_friction:
+        if args.lstm:
+            f = open(f'{main_folder}/motionHAR_log_lstm.txt', 'a')
+        elif args.no_friction:
             f = open(f'{main_folder}/motionHAR_log_no_friction.txt', 'a')
         else:
             f = open(f'{main_folder}/motionHAR_log.txt', 'a')

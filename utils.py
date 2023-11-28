@@ -303,17 +303,20 @@ def get_cifar_data(bs_train,bs_test):
 
 
 def get_motion_data(train_batch_size, test_batch_size):
-    X, y, meta_data = load_classification("MotionSenseHAR")
+    X, y, meta_data = load_classification("MotionSenseHAR", split='train')
+    test_X, test_y, meta_data = load_classification("MotionSenseHAR", split='test')
     X = torch.from_numpy(X).float().permute(0, 2, 1).contiguous()
+    test_X = torch.from_numpy(test_X).float().permute(0, 2, 1).contiguous()
 
     class_labels = meta_data['class_values']  # 'dws', 'ups', 'sit', 'std', 'wlk', 'jog'
     class_to_label = {v: i for i, v in enumerate(class_labels)}
 
     y = torch.tensor([class_to_label[el] for el in y]).long()
+    test_y = torch.tensor([class_to_label[el] for el in test_y]).long()
 
-    dataset = torch.utils.data.TensorDataset(X, y)
-    train_dataset, test_dataset = torch.utils.data.random_split(dataset, [int(len(dataset) * 0.8), len(dataset) - int(len(dataset) * 0.8)])
+    train_dataset = torch.utils.data.TensorDataset(X, y)
     train_dataset, validation_dataset = torch.utils.data.random_split(train_dataset, [int(len(train_dataset) * 0.8), len(train_dataset) - int(len(train_dataset) * 0.8)])
+    test_dataset = torch.utils.data.TensorDataset(test_X, test_y)
 
     train_dataloader = torch.utils.data.DataLoader(train_dataset, batch_size=train_batch_size, shuffle=True, drop_last=False)
     validation_dataloader = torch.utils.data.DataLoader(validation_dataset, batch_size=test_batch_size, shuffle=False, drop_last=False)
