@@ -1,6 +1,7 @@
 from scipy.integrate import odeint
 import numpy as np
 import torch
+from aeon.datasets import load_classification
 import os
 import torchvision
 import torchvision.transforms as transforms
@@ -299,6 +300,27 @@ def get_cifar_data(bs_train,bs_test):
                                               drop_last=True)
 
     return train_loader, valid_loader, test_loader
+
+
+def get_motion_data(train_batch_size, test_batch_size):
+    X, y, meta_data = load_classification("MotionSenseHAR")
+    X = torch.from_numpy(X).float().permute(0, 2, 1).contiguous()
+
+    class_labels = meta_data['class_values']  # 'dws', 'ups', 'sit', 'std', 'wlk', 'jog'
+    class_to_label = {v: i for i, v in enumerate(class_labels)}
+
+    y = torch.tensor([class_to_label[el] for el in y]).long()
+
+    dataset = torch.utils.data.TensorDataset(X, y)
+    train_dataset, test_dataset = torch.utils.data.random_split(dataset, [int(len(dataset) * 0.8), len(dataset) - int(len(dataset) * 0.8)])
+    train_dataset, validation_dataset = torch.utils.data.random_split(train_dataset, [int(len(train_dataset) * 0.8), len(train_dataset) - int(len(train_dataset) * 0.8)])
+
+    train_dataloader = torch.utils.data.DataLoader(train_dataset, batch_size=train_batch_size, shuffle=True, drop_last=False)
+    validation_dataloader = torch.utils.data.DataLoader(validation_dataset, batch_size=test_batch_size, shuffle=False, drop_last=False)
+    test_dataloader = torch.utils.data.DataLoader(test_dataset, batch_size=test_batch_size, shuffle=False, drop_last=False)
+
+    return train_dataloader, validation_dataloader, test_dataloader
+
 
 def get_lorenz(N, F, num_batch=128, lag=25, washout=200, window_size=0):
     # https://en.wikipedia.org/wiki/Lorenz_96_model
