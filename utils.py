@@ -6,6 +6,7 @@ import os
 import torchvision
 import torchvision.transforms as transforms
 from torch import nn
+from sklearn.model_selection import train_test_split
 from esn import spectral_norm_scaling
 
 
@@ -302,20 +303,81 @@ def get_cifar_data(bs_train,bs_test):
     return train_loader, valid_loader, test_loader
 
 
-def get_motion_data(train_batch_size, test_batch_size):
-    X, y, meta_data = load_classification("MotionSenseHAR", split='train')
-    test_X, test_y, meta_data = load_classification("MotionSenseHAR", split='test')
-    X = torch.from_numpy(X).float().permute(0, 2, 1).contiguous()
-    test_X = torch.from_numpy(test_X).float().permute(0, 2, 1).contiguous()
-
+def get_fordb_data(train_batch_size, test_batch_size):
+    X, y, meta_data = load_classification("FordB", split='train')
     class_labels = meta_data['class_values']  # 'dws', 'ups', 'sit', 'std', 'wlk', 'jog'
     class_to_label = {v: i for i, v in enumerate(class_labels)}
 
-    y = torch.tensor([class_to_label[el] for el in y]).long()
+    y = np.array([class_to_label[el] for el in y], dtype=np.int32)
+
+    X_train, X_val, y_train, y_val = train_test_split(X, y, test_size=0.2, stratify=y)
+
+    test_X, test_y, meta_data = load_classification("FordB", split='test')
+    X_train = torch.from_numpy(X_train).float().permute(0, 2, 1).contiguous()
+    X_val = torch.from_numpy(X_val).float().permute(0, 2, 1).contiguous()
+    test_X = torch.from_numpy(test_X).float().permute(0, 2, 1).contiguous()
+    y_train = torch.from_numpy(y_train).long()
+    y_val = torch.from_numpy(y_val).long()
     test_y = torch.tensor([class_to_label[el] for el in test_y]).long()
 
-    train_dataset = torch.utils.data.TensorDataset(X, y)
-    train_dataset, validation_dataset = torch.utils.data.random_split(train_dataset, [int(len(train_dataset) * 0.8), len(train_dataset) - int(len(train_dataset) * 0.8)])
+    train_dataset = torch.utils.data.TensorDataset(X_train, y_train)
+    validation_dataset = torch.utils.data.TensorDataset(X_val, y_val)
+    test_dataset = torch.utils.data.TensorDataset(test_X, test_y)
+
+    train_dataloader = torch.utils.data.DataLoader(train_dataset, batch_size=train_batch_size, shuffle=True, drop_last=False)
+    validation_dataloader = torch.utils.data.DataLoader(validation_dataset, batch_size=test_batch_size, shuffle=False, drop_last=False)
+    test_dataloader = torch.utils.data.DataLoader(test_dataset, batch_size=test_batch_size, shuffle=False, drop_last=False)
+
+    return train_dataloader, validation_dataloader, test_dataloader
+
+
+def get_uwavegesture_data(train_batch_size, test_batch_size):
+    X, y, meta_data = load_classification("UWaveGestureLibraryAll", split='train')
+    class_labels = meta_data['class_values']  # 'dws', 'ups', 'sit', 'std', 'wlk', 'jog'
+    class_to_label = {v: i for i, v in enumerate(class_labels)}
+
+    y = np.array([class_to_label[el] for el in y], dtype=np.int32)
+
+    X_train, X_val, y_train, y_val = train_test_split(X, y, test_size=0.2, stratify=y)
+
+    test_X, test_y, meta_data = load_classification("UWaveGestureLibraryAll", split='test')
+    X_train = torch.from_numpy(X_train).float().permute(0, 2, 1).contiguous()
+    X_val = torch.from_numpy(X_val).float().permute(0, 2, 1).contiguous()
+    test_X = torch.from_numpy(test_X).float().permute(0, 2, 1).contiguous()
+    y_train = torch.from_numpy(y_train).long()
+    y_val = torch.from_numpy(y_val).long()
+    test_y = torch.tensor([class_to_label[el] for el in test_y]).long()
+
+    train_dataset = torch.utils.data.TensorDataset(X_train, y_train)
+    validation_dataset = torch.utils.data.TensorDataset(X_val, y_val)
+    test_dataset = torch.utils.data.TensorDataset(test_X, test_y)
+
+    train_dataloader = torch.utils.data.DataLoader(train_dataset, batch_size=train_batch_size, shuffle=True, drop_last=False)
+    validation_dataloader = torch.utils.data.DataLoader(validation_dataset, batch_size=test_batch_size, shuffle=False, drop_last=False)
+    test_dataloader = torch.utils.data.DataLoader(test_dataset, batch_size=test_batch_size, shuffle=False, drop_last=False)
+
+    return train_dataloader, validation_dataloader, test_dataloader
+
+
+def get_motion_data(train_batch_size, test_batch_size):
+    X, y, meta_data = load_classification("MotionSenseHAR", split='train')
+    class_labels = meta_data['class_values']  # 'dws', 'ups', 'sit', 'std', 'wlk', 'jog'
+    class_to_label = {v: i for i, v in enumerate(class_labels)}
+
+    y = np.array([class_to_label[el] for el in y], dtype=np.int32)
+
+    X_train, X_val, y_train, y_val = train_test_split(X, y, test_size=0.2, stratify=y)
+
+    test_X, test_y, meta_data = load_classification("MotionSenseHAR", split='test')
+    X_train = torch.from_numpy(X_train).float().permute(0, 2, 1).contiguous()
+    X_val = torch.from_numpy(X_val).float().permute(0, 2, 1).contiguous()
+    test_X = torch.from_numpy(test_X).float().permute(0, 2, 1).contiguous()
+    y_train = torch.from_numpy(y_train).long()
+    y_val = torch.from_numpy(y_val).long()
+    test_y = torch.tensor([class_to_label[el] for el in test_y]).long()
+
+    train_dataset = torch.utils.data.TensorDataset(X_train, y_train)
+    validation_dataset = torch.utils.data.TensorDataset(X_val, y_val)
     test_dataset = torch.utils.data.TensorDataset(test_X, test_y)
 
     train_dataloader = torch.utils.data.DataLoader(train_dataset, batch_size=train_batch_size, shuffle=True, drop_last=False)

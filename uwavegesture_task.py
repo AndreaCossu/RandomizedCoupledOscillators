@@ -1,7 +1,7 @@
 from torch import nn, optim
 import torch
 import torch.nn.utils
-from utils import get_motion_data, coRNN, coESN, check, LSTM
+from utils import get_uwavegesture_data, coRNN, coESN, check, LSTM
 from pathlib import Path
 import argparse
 from tqdm import tqdm
@@ -11,37 +11,40 @@ from sklearn.linear_model import LogisticRegression
 
 # 4k parameters (25 LSTM units, 666 ESN/RON units, 40 coRNN units, 55 hcoRNN units)
 # LSTM:
-# lr from 1e-5 to 1e-1, best 1e-3,
-# best test acc: 92%
+# lr from 1e-4 to 1e-2, best 1e-3
+# best test acc: 55%
 
 # ESN:
 # leaky in 0.001 0.01 0.1 0.5 1, best 0.001
 # rho in 0.9 0.99, best 0.99
-# inp in 0.1 1 10, best 10
-# best test acc: 92%
+# inp in 0.1 1 10, best 0.1
+# best test acc: 88%
 
 # RON:
-# dt in 0.025 0.1 0.13 1 10 best 0.025
-# rho in 0.9 0.99 0.999 best 0.99
+# dt in 0.1 1 10 best 0.1
+# rho in 0.9 0.99 best 0.99
 # inp in 1 10 best 1
 # gamma 1 10 best 1
 # epsilon 1 10 best 10
-# gamma range 0.05 1 2 best 0.05
-# epsilon range 0.05 1 2 best 0.05
-# best test acc: 95%
+# gamma range 1 2 best 2
+# epsilon range 1 2 best 1
+# best test acc: 94%
 
 # coRNN:
 # dt 0.1 1 10 best 0.1
 # gamma 1 10 best 1
 # epsilon 1 10 best 10
-# best test acc: 97%
+# best test acc: 87%
 
 # hcoRNN:
+# dt 0.1 1 10 best 0.1
 # gamma 1 10 best 1
-# epsilon 1 10 best 10
-# epsilon range 1 2 best 1
-# gamma range 1 2 best 2
-# best test acc: 97%
+# epsilon 1 10 best 1
+# epsilon range 1 2 best 2
+# gamma range 1 2 best 1
+# lr 1e-4 1e-3 best 1e-3
+# best test acc: 88%
+
 
 
 
@@ -82,8 +85,8 @@ parser.add_argument('--use_test', action="store_true")
 args = parser.parse_args()
 print(args)
 
-n_inp = 12
-n_out = 6
+n_inp = 1
+n_out = 8
 bs_test = 500
 
 main_folder = 'result'
@@ -111,7 +114,7 @@ else:
     model = coRNN(n_inp, args.n_hid, n_out,args.dt,gamma,epsilon,
                   no_friction=args.no_friction, device=device).to(device)
 
-train_loader, valid_loader, test_loader = get_motion_data(args.batch, bs_test)
+train_loader, valid_loader, test_loader = get_uwavegesture_data(args.batch, bs_test)
 
 objective = nn.CrossEntropyLoss()
 optimizer = optim.Adam(model.parameters(), lr=args.lr)
@@ -179,11 +182,11 @@ else:
 
         Path(main_folder).mkdir(parents=True, exist_ok=True)
         if args.lstm:
-            f = open(f'{main_folder}/motionHAR_log_lstm.txt', 'a')
+            f = open(f'{main_folder}/uwave_log_lstm.txt', 'a')
         elif args.no_friction:
-            f = open(f'{main_folder}/motionHAR_log_no_friction.txt', 'a')
+            f = open(f'{main_folder}/uwave_log_no_friction.txt', 'a')
         else:
-            f = open(f'{main_folder}/motionHAR_log.txt', 'a')
+            f = open(f'{main_folder}/uwave_log.txt', 'a')
 
         f.write('valid accuracy: ' + str(round(valid_acc, 2)) + '\n')
         f.write('test accuracy: ' + str(round(test_acc, 2)) + '\n')
@@ -193,15 +196,15 @@ else:
 
 
 if args.lstm:
-    f = open(f'{main_folder}/motionHAR_log_lstm.txt', 'a')
+    f = open(f'{main_folder}/uwave_log_lstm.txt', 'a')
 elif args.no_friction and (not args.esn): # coRNN without friction
-    f = open(f'{main_folder}/motionHAR_log_no_friction.txt', 'a')
+    f = open(f'{main_folder}/uwave_log_no_friction.txt', 'a')
 elif args.esn and args.no_friction: # coESN
-    f = open(f'{main_folder}/motionHAR_log_coESN.txt', 'a')
+    f = open(f'{main_folder}/uwave_log_coESN.txt', 'a')
 elif args.esn: # ESN
-    f = open(f'{main_folder}/motionHAR_log_esn.txt', 'a')
+    f = open(f'{main_folder}/uwave_log_esn.txt', 'a')
 else: # original coRNN
-    f = open(f'{main_folder}/motionHAR_log.txt', 'a')
+    f = open(f'{main_folder}/uwave_log.txt', 'a')
 ar = ''
 for k, v in vars(args).items():
     ar += f'{str(k)}: {str(v)}, '
