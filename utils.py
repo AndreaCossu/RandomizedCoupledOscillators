@@ -167,18 +167,21 @@ class coRNNCell(nn.Module):
         self.gamma = torch.rand(n_hid, requires_grad=False, device=device) * (gamma_max - gamma_min) + gamma_min
         self.epsilon = torch.rand(n_hid, requires_grad=False, device=device) * (eps_max - eps_min) + eps_min
         if no_friction:
-            self.i2h = nn.Linear(n_inp + n_hid, n_hid)
+            self.i2h = nn.Linear(n_inp, n_hid)
+            self.h2h = nn.Linear(n_hid, n_hid, bias=False)
         else:
             self.i2h = nn.Linear(n_inp + n_hid + n_hid, n_hid)
+
         self.no_friction = no_friction
 
     def forward(self,x,hy,hz):
         if self.no_friction:
-            i2h_inp = torch.cat((x, hy), 1)
+            hz = hz + self.dt * (torch.tanh(self.i2h(x) + self.h2h(hy)) - self.gamma * hy - self.epsilon * hz)
         else:
             i2h_inp = torch.cat((x, hz, hy), 1)
-        hz = hz + self.dt * (torch.tanh(self.i2h(i2h_inp))
+            hz = hz + self.dt * (torch.tanh(self.i2h(i2h_inp))
                              - self.gamma * hy - self.epsilon * hz)
+
         hy = hy + self.dt * hz
 
         return hy, hz
@@ -240,9 +243,9 @@ class coESN(nn.Module):
             h2h = spectral_norm_scaling(h2h, rho)
         self.h2h = nn.Parameter(h2h, requires_grad=False)
 
-        x2h = 2 * (2 * torch.rand(n_inp, self.n_hid) - 1) * input_scaling
+        # x2h = 2 * (2 * torch.rand(n_inp, self.n_hid) - 1) * input_scaling
         # alternative init
-        # x2h = torch.rand(n_inp, n_hid) * input_scaling
+        x2h = torch.rand(n_inp, n_hid) * input_scaling
         self.x2h = nn.Parameter(x2h, requires_grad=False)
         bias = (torch.rand(n_hid) * 2 - 1) * input_scaling
         self.bias = nn.Parameter(bias, requires_grad=False)
@@ -269,7 +272,6 @@ class coESN(nn.Module):
             all_states.append(hy)
 
         return torch.stack(all_states, dim=1), [hy]  # list to be compatible with ESN implementation
-
 
 
 def get_cifar_data(bs_train,bs_test):

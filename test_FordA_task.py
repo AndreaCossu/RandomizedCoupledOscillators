@@ -1,7 +1,7 @@
 from torch import nn, optim
 import torch
 import torch.nn.utils
-from utils import coRNN, coESN, check, LSTM, get_FordA_data
+from utils import coRNN, coESN, check, LSTM, get_FordA_data, TrainedRON
 from pathlib import Path
 import argparse
 from tqdm import tqdm
@@ -44,9 +44,10 @@ parser.add_argument('--use_test', action="store_true")
 parser.add_argument('--test_trials', type=int, default=5,
                     help='number of trials to compute mean and std on test')
 parser.add_argument('--lstm', action="store_true", help="use LSTM")
+parser.add_argument('--trained_ron', action="store_true", help="use LSTM")
 
 
-main_folder = 'fordA_validation_result'
+main_folder = 'result'
 args = parser.parse_args()
 print(args)
 
@@ -95,7 +96,7 @@ epsilon = (args.epsilon - args.epsilon_range / 2., args.epsilon + args.epsilon_r
 
 max_test_accs = []
 if args.test_trials > 1:
-    main_folder = 'test_results'
+    main_folder = 'result'
     if args.esn:
         train_loader, valid_loader, test_loader = get_FordA_data(args.batch,bs_test, whole_train=True)
     else:
@@ -127,6 +128,9 @@ for trial in range(args.test_trials):
             if not check_passed:
                 raise ValueError("Check not passed.")
 
+    elif args.trained_ron:
+        model = TrainedRON(n_inp, args.n_hid, n_out, args.dt, gamma, epsilon, args.rho,
+                           args.inp_scaling, device=device).to(device)
     else:
         model = coRNN(n_inp, args.n_hid, n_out,args.dt,gamma,epsilon,
                     no_friction=args.no_friction, device=device).to(device)
@@ -176,6 +180,8 @@ for trial in range(args.test_trials):
             Path(main_folder).mkdir(parents=True, exist_ok=True)
             if args.lstm:
                 f = open(f'{main_folder}/FordA_log_lstm.txt', 'a')
+            elif args.trained_ron:
+                f = open(f'{main_folder}/FordA_log_trained_ron.txt', 'a')
             elif args.no_friction:
                 f = open(f'{main_folder}/FordA_log_no_friction.txt', 'a')
             else:
@@ -200,6 +206,8 @@ for trial in range(args.test_trials):
         f = open(f'{main_folder}/FordA_log_coESN.txt', 'a')
     elif args.esn: # ESN
         f = open(f'{main_folder}/FordA_log_esn.txt', 'a')
+    elif args.trained_ron:
+        f = open(f'{main_folder}/FordA_log_trained_ron.txt', 'a')
     else: # original coRNN
         f = open(f'{main_folder}/FordA_log.txt', 'a')
     ar = ''
@@ -219,6 +227,8 @@ if args.lstm:
     f = open(f'{main_folder}/FordA_log_lstm.txt', 'a')
 elif args.no_friction and (not args.esn): # coRNN without friction
     f = open(f'{main_folder}/FordA_log_no_friction.txt', 'a')
+elif args.trained_ron:
+    f = open(f'{main_folder}/FordA_log_trained_ron.txt', 'a')
 elif args.esn and args.no_friction: # coESN
     f = open(f'{main_folder}/FordA_log_coESN.txt', 'a')
 elif args.esn: # ESN
