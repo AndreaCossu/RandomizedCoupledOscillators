@@ -1,12 +1,12 @@
-# Randomly Coupled Oscillators (RCO)
+# Randomized Oscillators Network (RON)
 
-This repo is a fork of the repo https://github.com/tk-rusch/coRNN, where the coRNN model was first introduced.
+This repo is a fork of the repo https://github.com/tk-rusch/coRNN, where the coRNN model was first introduced. We extend coRNN to the reservoir computing paradigm and we dub our model Randomized Oscillators Network (RON).
 
-In this repo, we extend the coRNN model and adapt it to the reservoir computing paradigm.
+Each main file runs RON and all other models on a given dataset. 
 
---no_friction (to use the hcoRNN model)
+``--no_friction`` (to use the hcoRNN model)
 
---esn --no_friction (to use the RON model)
+``--esn --no_friction`` (to use the RON model)
 
 Example: to train and test on the Adiac classification tasks, for 5 consecutive times, just type:
 
