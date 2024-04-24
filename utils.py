@@ -274,6 +274,70 @@ class coESN(nn.Module):
         return torch.stack(all_states, dim=1), [hy]  # list to be compatible with ESN implementation
 
 
+class phys_coESN(nn.Module):
+    """
+    Batch-first (B, L, I)
+    """
+    def __init__(self, n_inp, n_hid, dt, gamma, epsilon, diag, input_scaling, device='cpu',
+                 fading=False):
+        super().__init__()
+        self.n_hid = n_hid
+        self.device = device
+        self.fading = fading
+        self.dt = dt
+        if isinstance(gamma, tuple):
+            gamma_min, gamma_max = gamma
+            self.gamma = torch.rand(n_hid, requires_grad=False, device=device) * (gamma_max - gamma_min) + gamma_min
+        else:
+            self.gamma = gamma
+        if isinstance(epsilon, tuple):
+            eps_min, eps_max = epsilon
+            self.epsilon = torch.rand(n_hid, requires_grad=False, device=device) * (eps_max - eps_min) + eps_min
+        else:
+            self.epsilon = epsilon
+        if isinstance(diag, tuple):
+            diag_min, diag_max = diag
+            self.diag = torch.rand(n_hid, requires_grad=True, device=device) * (diag_max - diag_min) + diag_min
+        else:
+            self.diag = diag
+
+        h2h = torch.empty(n_hid, n_hid, device=device)
+        #h2h = spectral_norm_scaling(h2h, rho) # spectral rescaling is useless here
+        nn.init.orthogonal_(h2h) 
+        h2h = self.diag * h2h # skewly rescaled orthogonal recurrent matrix
+        h2h_T = torch.transpose(h2h,0,1) * self.diag
+        self.h2h = nn.Parameter(h2h, requires_grad=False)
+        self.h2h_T = nn.Parameter(h2h_T, requires_grad=False)
+
+        x2h = torch.rand(n_inp, n_hid) * input_scaling
+        self.x2h = nn.Parameter(x2h, requires_grad=False)
+        bias = (torch.rand(n_hid) * 2 - 1) * input_scaling
+        self.bias = nn.Parameter(bias, requires_grad=False)
+
+    def cell(self, x, hy, hz):
+        hz = hz + self.dt * ( torch.matmul(x, self.x2h) 
+                            - torch.matmul(self.h2h_T, torch.tanh( torch.matmul(hy, self.h2h) + self.bias ) )
+                             - self.gamma * hy - self.epsilon * hz)
+        if self.fading:
+            hz = hz - self.dt * hz
+
+        hy = hy + self.dt * hz
+        if self.fading:
+            hy = hy - self.dt * hy
+        return hy, hz
+
+    def forward(self, x):
+        ## initialize hidden states
+        hy = torch.zeros(x.size(0),self.n_hid).to(self.device)
+        hz = torch.zeros(x.size(0),self.n_hid).to(self.device)
+        all_states = []
+        for t in range(x.size(1)):
+            hy, hz = self.cell(x[:, t],hy,hz)
+            all_states.append(hy)
+
+        return torch.stack(all_states, dim=1), [hy]  # list to be compatible with ESN implementation
+
+
 def get_cifar_data(bs_train,bs_test):
     train_dataset = torchvision.datasets.CIFAR10(root='data/',
                                                  train=True,
